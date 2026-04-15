@@ -17,7 +17,6 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
 
         do {
             try SMCKit.open()
-            defer { _ = SMCKit.close() }
 
             let smcKey = SMCKit.getKey(key, type: DataTypes.UInt8)
             let bytes: SMCBytes = (
@@ -61,7 +60,6 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
 
         do {
             try SMCKit.open()
-            defer { _ = SMCKit.close() }
 
             let smcKey = SMCKit.getKey(key, type: DataTypes.UInt32)
             let data = try SMCKit.readData(smcKey)
@@ -86,7 +84,6 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
         }
 
         try SMCKit.open()
-        defer { _ = SMCKit.close() }
 
         let smcKey = SMCKit.getKey(key, type: DataTypes.UInt8)
         return try SMCKit.readData(smcKey).0
@@ -98,7 +95,6 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
         }
 
         try SMCKit.open()
-        defer { _ = SMCKit.close() }
 
         let smcKey = SMCKit.getKey(key, type: DataTypes.UInt8)
         let bytes: SMCBytes = (

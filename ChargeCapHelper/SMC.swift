@@ -102,44 +102,43 @@ struct SMCKey {
 }
 
 enum SMCKit {
-    enum SMCError: Error {
+    enum SMCError: LocalizedError {
         case driverNotFound
-        case failedToOpen
+        case failedToOpen(kern_return_t)
         case keyNotFound(String)
         case notPrivileged
         case unknown(kern_return_t, UInt8)
+
+        var errorDescription: String? {
+            switch self {
+            case .driverNotFound:
+                return "SMC driver not found"
+            case .failedToOpen(let result):
+                return "Failed to open SMC driver: 0x\(String(result, radix: 16))"
+            case .keyNotFound(let key):
+                return "SMC key not found: \(key)"
+            case .notPrivileged:
+                return "Not privileged to access SMC"
+            case .unknown(let result, let smcResult):
+                return "SMC error: IOKit=0x\(String(result, radix: 16)), SMC=\(smcResult)"
+            }
+        }
     }
 
     private static var connection: io_connect_t = 0
+    private static let lock = NSLock()
 
     static func open() throws {
+        lock.lock()
+        defer { lock.unlock() }
+
         if connection != 0 { return }
 
-        let log: (String) -> Void = { msg in
-            let entry = "\(Date()): \(msg)\n"
-            if let data = entry.data(using: .utf8) {
-                if FileManager.default.fileExists(atPath: "/tmp/chargecap-smc.log") {
-                    if let fh = FileHandle(forWritingAtPath: "/tmp/chargecap-smc.log") {
-                        fh.seekToEndOfFile()
-                        fh.write(data)
-                        fh.closeFile()
-                    }
-                } else {
-                    FileManager.default.createFile(atPath: "/tmp/chargecap-smc.log", contents: data)
-                }
-            }
-        }
-
-        log("Trying AppleSMCKeysEndpoint")
         var service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMCKeysEndpoint"))
-        log("AppleSMCKeysEndpoint result: \(service)")
         if service == 0 {
-            log("Trying AppleSMC")
             service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
-            log("AppleSMC result: \(service)")
         }
         if service == 0 {
-            log("ERROR: no driver found")
             throw SMCError.driverNotFound
         }
 
@@ -147,14 +146,14 @@ enum SMCKit {
         IOObjectRelease(service)
 
         if result != kIOReturnSuccess {
-            log("ERROR: IOServiceOpen failed with 0x\(String(result, radix: 16))")
-            throw SMCError.failedToOpen
+            throw SMCError.failedToOpen(result)
         }
-        log("Success, connection=\(connection)")
     }
 
     @discardableResult
     static func close() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
         guard connection != 0 else { return true }
         let result = IOServiceClose(connection)
         connection = 0
