@@ -11,7 +11,7 @@ final class HelperDelegate: NSObject, NSXPCListenerDelegate {
 }
 
 let delegate = HelperDelegate()
-let listener = NSXPCListener(machServiceName: "com.chargecap.Helper.mach")
+let listener = NSXPCListener(machServiceName: ChargeCapHelperConfiguration.machServiceName)
 listener.delegate = delegate
 listener.resume()
 RunLoop.current.run()

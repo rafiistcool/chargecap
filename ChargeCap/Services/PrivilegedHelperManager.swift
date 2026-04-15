@@ -7,20 +7,26 @@ final class PrivilegedHelperManager: ObservableObject {
     @Published private(set) var isInstalled = false
     @Published private(set) var lastErrorDescription: String?
 
-    private lazy var connection: NSXPCConnection = {
-        let connection = NSXPCConnection(
+    private var _connection: NSXPCConnection?
+
+    private var connection: NSXPCConnection {
+        if let existing = _connection { return existing }
+
+        let conn = NSXPCConnection(
             machServiceName: ChargeCapHelperConfiguration.machServiceName,
             options: .privileged
         )
-        connection.remoteObjectInterface = NSXPCInterface(with: ChargeCapHelperProtocol.self)
-        connection.invalidationHandler = { [weak self] in
+        conn.remoteObjectInterface = NSXPCInterface(with: ChargeCapHelperProtocol.self)
+        conn.invalidationHandler = { [weak self] in
             Task { @MainActor in
                 self?.isInstalled = false
+                self?._connection = nil
             }
         }
-        connection.resume()
-        return connection
-    }()
+        conn.resume()
+        _connection = conn
+        return conn
+    }
 
     func refreshStatus() async {
         do {
@@ -102,12 +108,20 @@ final class PrivilegedHelperManager: ObservableObject {
     }
 
     private var helperProxy: ChargeCapHelperProtocol? {
-        connection.remoteObjectProxyWithErrorHandler { [weak self] error in
-            Task { @MainActor in
-                self?.isInstalled = false
-                self?.lastErrorDescription = error.localizedDescription
-            }
+        let conn = connection
+        var proxyError: Error?
+        let proxy = conn.remoteObjectProxyWithErrorHandler { error in
+            proxyError = error
         } as? ChargeCapHelperProtocol
+
+        if let proxyError {
+            Task { @MainActor in
+                self.isInstalled = false
+                self.lastErrorDescription = proxyError.localizedDescription
+            }
+        }
+
+        return proxy
     }
 
     private func blessHelper() throws {
@@ -144,19 +158,33 @@ final class PrivilegedHelperManager: ObservableObject {
         }
     }
 
+    private static let xpcTimeout: Duration = .seconds(5)
+
     private func getVersion() async throws -> String {
         guard let helper = helperProxy else {
             throw HelperError.connectionUnavailable
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            helper.getVersion { version in
-                if version == ChargeCapHelperConfiguration.version {
-                    continuation.resume(returning: version)
-                } else {
-                    continuation.resume(throwing: HelperError.versionMismatch(expected: ChargeCapHelperConfiguration.version, actual: version))
+        return try await withThrowingTaskGroup(of: String.self) { group in
+            group.addTask {
+                try await withCheckedThrowingContinuation { continuation in
+                    helper.getVersion { version in
+                        if version == ChargeCapHelperConfiguration.version {
+                            continuation.resume(returning: version)
+                        } else {
+                            continuation.resume(throwing: HelperError.versionMismatch(expected: ChargeCapHelperConfiguration.version, actual: version))
+                        }
+                    }
                 }
             }
+            group.addTask {
+                try await Task.sleep(for: Self.xpcTimeout)
+                throw HelperError.connectionUnavailable
+            }
+
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
         }
     }
 
@@ -165,14 +193,25 @@ final class PrivilegedHelperManager: ObservableObject {
             throw HelperError.connectionUnavailable
         }
 
-        try await withCheckedThrowingContinuation { continuation in
-            helper.writeSMCByte(key: key, value: value) { success, errorDescription in
-                if success {
-                    continuation.resume()
-                } else {
-                    continuation.resume(throwing: HelperError.writeFailed(key: key, description: errorDescription ?? "Unknown SMC write error"))
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await withCheckedThrowingContinuation { continuation in
+                    helper.writeSMCByte(key: key, value: value) { success, errorDescription in
+                        if success {
+                            continuation.resume()
+                        } else {
+                            continuation.resume(throwing: HelperError.writeFailed(key: key, description: errorDescription ?? "Unknown SMC write error"))
+                        }
+                    }
                 }
             }
+            group.addTask {
+                try await Task.sleep(for: Self.xpcTimeout)
+                throw HelperError.connectionUnavailable
+            }
+
+            try await group.next()
+            group.cancelAll()
         }
     }
 
@@ -181,14 +220,26 @@ final class PrivilegedHelperManager: ObservableObject {
             throw HelperError.connectionUnavailable
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            helper.readSMCUInt32(key: key) { value, errorDescription in
-                if let errorDescription {
-                    continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
-                } else {
-                    continuation.resume(returning: value)
+        return try await withThrowingTaskGroup(of: UInt32.self) { group in
+            group.addTask {
+                try await withCheckedThrowingContinuation { continuation in
+                    helper.readSMCUInt32(key: key) { value, errorDescription in
+                        if let errorDescription {
+                            continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
+                        } else {
+                            continuation.resume(returning: value)
+                        }
+                    }
                 }
             }
+            group.addTask {
+                try await Task.sleep(for: Self.xpcTimeout)
+                throw HelperError.connectionUnavailable
+            }
+
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
         }
     }
 

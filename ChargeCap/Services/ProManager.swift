@@ -13,7 +13,11 @@ final class ProManager: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        #if DEBUG
         self.hasUnlockedPro = defaults.bool(forKey: overrideDefaultsKey)
+        #else
+        self.hasUnlockedPro = false
+        #endif
 
         Task {
             await refreshProducts()
@@ -38,7 +42,11 @@ final class ProManager: ObservableObject {
     }
 
     func refreshEntitlements() async {
+        #if DEBUG
         var isUnlocked = defaults.bool(forKey: overrideDefaultsKey)
+        #else
+        var isUnlocked = false
+        #endif
 
         for await result in Transaction.currentEntitlements {
             guard case .verified(let transaction) = result else { continue }

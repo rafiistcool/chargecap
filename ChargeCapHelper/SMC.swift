@@ -160,7 +160,7 @@ enum SMCKit {
     }
 
     private static func callDriver(_ input: inout SMCParamStruct) throws -> SMCParamStruct {
-        assert(MemoryLayout<SMCParamStruct>.stride == 80, "SMCParamStruct must be 80 bytes")
+        precondition(MemoryLayout<SMCParamStruct>.stride == 80, "SMCParamStruct must be 80 bytes")
 
         var output = SMCParamStruct()
         let inputSize = MemoryLayout<SMCParamStruct>.stride

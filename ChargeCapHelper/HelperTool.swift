@@ -10,6 +10,11 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
     }
 
     func writeSMCByte(key: String, value: UInt8, withReply reply: @escaping (Bool, String?) -> Void) {
+        guard key.utf8.count == 4 else {
+            reply(false, "Invalid SMC key '\(key)': must be exactly 4 characters")
+            return
+        }
+
         do {
             try SMCKit.open()
             defer { _ = SMCKit.close() }
@@ -35,6 +40,11 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
     }
 
     func readSMCByte(key: String, withReply reply: @escaping (UInt8, String?) -> Void) {
+        guard key.utf8.count == 4 else {
+            reply(0, "Invalid SMC key '\(key)': must be exactly 4 characters")
+            return
+        }
+
         do {
             let value = try readSMCByteSync(key: key)
             reply(value, nil)
@@ -44,6 +54,11 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
     }
 
     func readSMCUInt32(key: String, withReply reply: @escaping (UInt32, String?) -> Void) {
+        guard key.utf8.count == 4 else {
+            reply(0, "Invalid SMC key '\(key)': must be exactly 4 characters")
+            return
+        }
+
         do {
             try SMCKit.open()
             defer { _ = SMCKit.close() }
@@ -66,6 +81,10 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
     }
 
     private func readSMCByteSync(key: String) throws -> UInt8 {
+        guard key.utf8.count == 4 else {
+            throw SMCKit.SMCError.keyNotFound(key)
+        }
+
         try SMCKit.open()
         defer { _ = SMCKit.close() }
 
@@ -74,6 +93,10 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
     }
 
     private func writeSMCByteSync(key: String, value: UInt8) throws {
+        guard key.utf8.count == 4 else {
+            throw SMCKit.SMCError.keyNotFound(key)
+        }
+
         try SMCKit.open()
         defer { _ = SMCKit.close() }
 

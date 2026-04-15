@@ -161,7 +161,8 @@ final class ChargeController: ObservableObject {
 
         guard helperManager.isInstalled else {
             state.status = .unavailable(helperManager.lastErrorDescription ?? "Install helper to control charging")
-            monitor.updateChargeMetadata(limit: state.targetLimit, isChargeInhibited: false)
+            let lastKnownInhibited = lastCommand == .inhibit || lastCommand == .pause
+            monitor.updateChargeMetadata(limit: state.targetLimit, isChargeInhibited: lastKnownInhibited)
             return
         }
 

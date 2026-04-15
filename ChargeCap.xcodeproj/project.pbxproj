@@ -212,6 +212,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = CC0000000000000000000082 /* Build configuration list for PBXNativeTarget "ChargeCapHelper" */;
 			buildPhases = (
+				CC0000000000000000000200 /* Preprocess Helper-Info.plist */,
 				CC000000000000000000004E /* Sources */,
 				CC000000000000000000004D /* Frameworks */,
 			);
@@ -304,6 +305,29 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		CC0000000000000000000200 /* Preprocess Helper-Info.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/ChargeCapHelper/Helper-Info.plist",
+			);
+			name = "Preprocess Helper-Info.plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Helper-Info.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "sed \"s/\\$(DEVELOPMENT_TEAM)/${DEVELOPMENT_TEAM}/g\" \"${SRCROOT}/ChargeCapHelper/Helper-Info.plist\" > \"${DERIVED_FILE_DIR}/Helper-Info.plist\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
 		CC00000000000000000000A0 /* Debug */ = {
@@ -442,7 +466,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = XGCYZ8NBU4;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ChargeCap/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -468,7 +492,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = XGCYZ8NBU4;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ChargeCap/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -499,7 +523,7 @@
 					"-sectcreate",
 					__TEXT,
 					__info_plist,
-					"$(SRCROOT)/ChargeCapHelper/Helper-Info.plist",
+					"$(DERIVED_FILE_DIR)/Helper-Info.plist",
 					"-sectcreate",
 					__TEXT,
 					__launchd_plist,
@@ -528,7 +552,7 @@
 					"-sectcreate",
 					__TEXT,
 					__info_plist,
-					"$(SRCROOT)/ChargeCapHelper/Helper-Info.plist",
+					"$(DERIVED_FILE_DIR)/Helper-Info.plist",
 					"-sectcreate",
 					__TEXT,
 					__launchd_plist,
