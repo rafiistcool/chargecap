@@ -49,11 +49,23 @@ final class PrivilegedHelperManager: ObservableObject {
             isInstalled = false
         }
 
-        try blessHelper()
+        do {
+            try blessHelper()
+        } catch {
+            lastErrorDescription = error.localizedDescription
+            throw error
+        }
+
         try await Task.sleep(for: .seconds(1))
-        _ = try await getVersion()
-        isInstalled = true
-        lastErrorDescription = nil
+
+        do {
+            _ = try await getVersion()
+            isInstalled = true
+            lastErrorDescription = nil
+        } catch {
+            lastErrorDescription = error.localizedDescription
+            throw error
+        }
     }
 
     func enableCharging() async throws {
@@ -158,35 +170,53 @@ final class PrivilegedHelperManager: ObservableObject {
         }
     }
 
-    private static let xpcTimeout: Duration = .seconds(5)
+    private static let xpcTimeout: TimeInterval = 5
+
+    /// Wraps a continuation to guarantee exactly one resume, preventing leaks.
+    private final class SafeContinuation<T: Sendable>: @unchecked Sendable {
+        private var continuation: CheckedContinuation<T, Error>?
+        private let lock = NSLock()
+
+        init(_ continuation: CheckedContinuation<T, Error>) {
+            self.continuation = continuation
+        }
+
+        func resume(returning value: T) {
+            lock.lock()
+            let c = continuation
+            continuation = nil
+            lock.unlock()
+            c?.resume(returning: value)
+        }
+
+        func resume(throwing error: Error) {
+            lock.lock()
+            let c = continuation
+            continuation = nil
+            lock.unlock()
+            c?.resume(throwing: error)
+        }
+    }
 
     private func getVersion() async throws -> String {
         guard let helper = helperProxy else {
             throw HelperError.connectionUnavailable
         }
 
-        return try await withThrowingTaskGroup(of: String.self) { group in
-            group.addTask {
-                try await withCheckedThrowingContinuation { continuation in
-                    helper.getVersion { version in
-                        if version == ChargeCapHelperConfiguration.version {
-                            continuation.resume(returning: version)
-                        } else {
-                            continuation.resume(throwing: HelperError.versionMismatch(expected: ChargeCapHelperConfiguration.version, actual: version))
-                        }
-                    }
-                }
-            }
-            group.addTask {
-                try await Task.sleep(for: Self.xpcTimeout)
-                throw HelperError.connectionUnavailable
+        return try await withCheckedThrowingContinuation { raw in
+            let continuation = SafeContinuation(raw)
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
+                continuation.resume(throwing: HelperError.connectionUnavailable)
             }
 
-            guard let result = try await group.next() else {
-                throw HelperError.connectionUnavailable
+            helper.getVersion { version in
+                if version == ChargeCapHelperConfiguration.version {
+                    continuation.resume(returning: version)
+                } else {
+                    continuation.resume(throwing: HelperError.versionMismatch(expected: ChargeCapHelperConfiguration.version, actual: version))
+                }
             }
-            group.cancelAll()
-            return result
         }
     }
 
@@ -195,25 +225,20 @@ final class PrivilegedHelperManager: ObservableObject {
             throw HelperError.connectionUnavailable
         }
 
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask {
-                try await withCheckedThrowingContinuation { continuation in
-                    helper.writeSMCByte(key: key, value: value) { success, errorDescription in
-                        if success {
-                            continuation.resume()
-                        } else {
-                            continuation.resume(throwing: HelperError.writeFailed(key: key, description: errorDescription ?? "Unknown SMC write error"))
-                        }
-                    }
-                }
-            }
-            group.addTask {
-                try await Task.sleep(for: Self.xpcTimeout)
-                throw HelperError.connectionUnavailable
+        try await withCheckedThrowingContinuation { (raw: CheckedContinuation<Void, Error>) in
+            let continuation = SafeContinuation(raw)
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
+                continuation.resume(throwing: HelperError.connectionUnavailable)
             }
 
-            try await group.next()
-            group.cancelAll()
+            helper.writeSMCByte(key: key, value: value) { success, errorDescription in
+                if success {
+                    continuation.resume(returning: ())
+                } else {
+                    continuation.resume(throwing: HelperError.writeFailed(key: key, description: errorDescription ?? "Unknown SMC write error"))
+                }
+            }
         }
     }
 
@@ -222,28 +247,20 @@ final class PrivilegedHelperManager: ObservableObject {
             throw HelperError.connectionUnavailable
         }
 
-        return try await withThrowingTaskGroup(of: UInt32.self) { group in
-            group.addTask {
-                try await withCheckedThrowingContinuation { continuation in
-                    helper.readSMCUInt32(key: key) { value, errorDescription in
-                        if let errorDescription {
-                            continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
-                        } else {
-                            continuation.resume(returning: value)
-                        }
-                    }
-                }
-            }
-            group.addTask {
-                try await Task.sleep(for: Self.xpcTimeout)
-                throw HelperError.connectionUnavailable
+        return try await withCheckedThrowingContinuation { raw in
+            let continuation = SafeContinuation(raw)
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
+                continuation.resume(throwing: HelperError.connectionUnavailable)
             }
 
-            guard let result = try await group.next() else {
-                throw HelperError.connectionUnavailable
+            helper.readSMCUInt32(key: key) { value, errorDescription in
+                if let errorDescription {
+                    continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
+                } else {
+                    continuation.resume(returning: value)
+                }
             }
-            group.cancelAll()
-            return result
         }
     }
 
