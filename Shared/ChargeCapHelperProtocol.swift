@@ -1,7 +1,7 @@
 import Foundation
 
 enum ChargeCapHelperConfiguration {
-    static let version = "2"
+    static let version = "3"
     static let helperIdentifier = "com.chargecap.Helper"
     static let machServiceName = "com.chargecap.Helper.mach"
 }

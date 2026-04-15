@@ -5,7 +5,6 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
     static let shared = HelperTool()
 
     private var modifiedKeys: [String: UInt8] = [:]
-    private var batteryManagerConnection: io_connect_t = 0
 
     func getVersion(withReply reply: @escaping (String) -> Void) {
         reply(ChargeCapHelperConfiguration.version)
@@ -13,12 +12,34 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
 
     func setChargingEnabled(_ enabled: Bool, withReply reply: @escaping (Bool, String?) -> Void) {
         do {
-            let conn = try openBatteryManager()
-            // Selector 0 = InhibitCharging: 1 to inhibit, 0 to allow
-            var input: [UInt64] = [enabled ? 0 : 1]
-            let result = IOConnectCallScalarMethod(conn, 0, &input, 1, nil, nil)
-            guard result == kIOReturnSuccess else {
-                reply(false, "InhibitCharging failed: 0x\(String(result, radix: 16))")
+            try SMCKit.open()
+
+            // Apple Silicon ("Tahoe"): use CHTE (UInt32)
+            // Intel ("Legacy"): use CH0B + CH0C (UInt8)
+            if smcKeyExists("CHTE") {
+                let key = SMCKit.getKey("CHTE", type: DataTypes.UInt32)
+                let val: UInt8 = enabled ? 0x00 : 0x01
+                let bytes: SMCBytes = (
+                    val, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0
+                )
+                try SMCKit.writeData(key, data: bytes)
+            } else if smcKeyExists("CH0B") {
+                let val: UInt8 = enabled ? 0x00 : 0x02
+                let keyB = SMCKit.getKey("CH0B", type: DataTypes.UInt8)
+                let bytes: SMCBytes = (
+                    val, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0
+                )
+                try SMCKit.writeData(keyB, data: bytes)
+                let keyC = SMCKit.getKey("CH0C", type: DataTypes.UInt8)
+                try? SMCKit.writeData(keyC, data: bytes)
+            } else {
+                reply(false, "No supported charging control key found (tried CHTE, CH0B)")
                 return
             }
             reply(true, nil)
@@ -124,23 +145,8 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
         try SMCKit.writeData(smcKey, data: bytes)
     }
 
-    private func openBatteryManager() throws -> io_connect_t {
-        if batteryManagerConnection != 0 { return batteryManagerConnection }
-
-        guard let matching = IOServiceMatching("AppleSmartBatteryManager") else {
-            throw NSError(domain: "HelperTool", code: 1, userInfo: [NSLocalizedDescriptionKey: "AppleSmartBatteryManager not available"])
-        }
-        let service = IOServiceGetMatchingService(kIOMainPortDefault, matching)
-        guard service != 0 else {
-            throw NSError(domain: "HelperTool", code: 2, userInfo: [NSLocalizedDescriptionKey: "AppleSmartBatteryManager service not found"])
-        }
-
-        let result = IOServiceOpen(service, mach_task_self_, 0, &batteryManagerConnection)
-        IOObjectRelease(service)
-
-        guard result == kIOReturnSuccess else {
-            throw NSError(domain: "HelperTool", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to open AppleSmartBatteryManager: 0x\(String(result, radix: 16))"])
-        }
-        return batteryManagerConnection
+    private func smcKeyExists(_ keyName: String) -> Bool {
+        let key = SMCKit.getKey(keyName, type: DataTypes.UInt8)
+        return (try? SMCKit.readData(key)) != nil
     }
 }
