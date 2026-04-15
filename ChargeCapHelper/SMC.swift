@@ -164,6 +164,17 @@ enum SMCKit {
         SMCKey(code: FourCharCode(fromString: code), info: type)
     }
 
+    static func keyInfo(_ code: String) throws -> SMCParamStruct.SMCKeyInfoData {
+        var input = SMCParamStruct()
+        input.key = FourCharCode(fromString: code)
+        input.data8 = SMCParamStruct.Selector.getKeyInfo.rawValue
+        return try callDriver(&input).keyInfo
+    }
+
+    static func keyExists(_ code: String) -> Bool {
+        return (try? keyInfo(code)) != nil
+    }
+
     static func readData(_ key: SMCKey) throws -> SMCBytes {
         var input = SMCParamStruct()
         input.key = key.code

@@ -14,9 +14,12 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
         do {
             try SMCKit.open()
 
-            // Apple Silicon ("Tahoe"): use CHTE (UInt32)
-            // Intel ("Legacy"): use CH0B + CH0C (UInt8)
-            if smcKeyExists("CHTE") {
+            let hasCHTE = smcKeyExists("CHTE")
+            let hasCH0B = smcKeyExists("CH0B")
+            let hasCHWA = smcKeyExists("CHWA")
+
+            if hasCHTE {
+                // Apple Silicon ("Tahoe"): CHTE is UInt32
                 let key = SMCKit.getKey("CHTE", type: DataTypes.UInt32)
                 let val: UInt8 = enabled ? 0x00 : 0x01
                 let bytes: SMCBytes = (
@@ -26,7 +29,19 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
                     0, 0, 0, 0, 0, 0, 0, 0
                 )
                 try SMCKit.writeData(key, data: bytes)
-            } else if smcKeyExists("CH0B") {
+            } else if hasCHWA {
+                // Apple Silicon alt (bclm approach): CHWA is UInt8, 1=limit to 80%, 0=allow 100%
+                let key = SMCKit.getKey("CHWA", type: DataTypes.UInt8)
+                let val: UInt8 = enabled ? 0x00 : 0x01
+                let bytes: SMCBytes = (
+                    val, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0
+                )
+                try SMCKit.writeData(key, data: bytes)
+            } else if hasCH0B {
+                // Intel: CH0B + CH0C are UInt8
                 let val: UInt8 = enabled ? 0x00 : 0x02
                 let keyB = SMCKit.getKey("CH0B", type: DataTypes.UInt8)
                 let bytes: SMCBytes = (
@@ -39,7 +54,7 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
                 let keyC = SMCKit.getKey("CH0C", type: DataTypes.UInt8)
                 try? SMCKit.writeData(keyC, data: bytes)
             } else {
-                reply(false, "No supported charging control key found (tried CHTE, CH0B)")
+                reply(false, "No supported charging key found (CHTE=\(hasCHTE), CHWA=\(hasCHWA), CH0B=\(hasCH0B))")
                 return
             }
             reply(true, nil)
@@ -146,7 +161,6 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
     }
 
     private func smcKeyExists(_ keyName: String) -> Bool {
-        let key = SMCKit.getKey(keyName, type: DataTypes.UInt8)
-        return (try? SMCKit.readData(key)) != nil
+        return SMCKit.keyExists(keyName)
     }
 }
