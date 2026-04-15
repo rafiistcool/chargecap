@@ -61,7 +61,7 @@ struct ChargeCapApp: App {
             HStack(spacing: 2) {
                 let state = batteryMonitor.batteryState
                 Image(systemName: menuBarIconName)
-                if state.hasBattery {
+                if state.hasBattery && appSettings.showPercentInMenuBar {
                     Text("\(state.chargePercent)%")
                         .monospacedDigit()
                 }

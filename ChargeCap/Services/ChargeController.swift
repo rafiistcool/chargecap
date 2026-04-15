@@ -71,6 +71,14 @@ final class ChargeController: ObservableObject {
         settings.sailingRange = value
     }
 
+    func updateSailingModeEnabled(_ enabled: Bool) {
+        settings.isSailingModeEnabled = enabled
+    }
+
+    func updateHeatProtectionEnabled(_ enabled: Bool) {
+        settings.isHeatProtectionEnabled = enabled
+    }
+
     func updateWarmTemperatureThreshold(_ value: Int) {
         settings.warmTemperatureThreshold = value
     }
@@ -113,6 +121,8 @@ final class ChargeController: ObservableObject {
             settings.$isChargeLimitingEnabled.map { _ in () }.eraseToAnyPublisher(),
             settings.$targetChargeLimit.map { _ in () }.eraseToAnyPublisher(),
             settings.$sailingRange.map { _ in () }.eraseToAnyPublisher(),
+            settings.$isSailingModeEnabled.map { _ in () }.eraseToAnyPublisher(),
+            settings.$isHeatProtectionEnabled.map { _ in () }.eraseToAnyPublisher(),
             settings.$warmTemperatureThreshold.map { _ in () }.eraseToAnyPublisher(),
             settings.$hotTemperatureThreshold.map { _ in () }.eraseToAnyPublisher(),
             settings.$chargeSchedule.map { _ in () }.eraseToAnyPublisher()
@@ -210,12 +220,14 @@ final class ChargeController: ObservableObject {
 
         let roundedTemperature = Int(batteryState.temperature.rounded())
 
-        if roundedTemperature >= state.hotTemperatureThreshold {
-            return (.heatProtectionStopped, .inhibit)
-        }
+        if state.isHeatProtectionEnabled {
+            if roundedTemperature >= state.hotTemperatureThreshold {
+                return (.heatProtectionStopped, .inhibit)
+            }
 
-        if roundedTemperature >= state.warmTemperatureThreshold {
-            return (.heatProtectionPaused, .pause)
+            if roundedTemperature >= state.warmTemperatureThreshold {
+                return (.heatProtectionPaused, .pause)
+            }
         }
 
         if !batteryState.isPluggedIn {
@@ -230,7 +242,7 @@ final class ChargeController: ObservableObject {
             return (.chargingToLimit, .normal)
         }
 
-        if lastCommand == .inhibit || lastCommand == .pause {
+        if state.isSailingModeEnabled, lastCommand == .inhibit || lastCommand == .pause {
             return (.sailing, .inhibit)
         }
 
@@ -318,6 +330,8 @@ final class ChargeController: ObservableObject {
         nextState.warmTemperatureThreshold = settings.warmTemperatureThreshold
         nextState.hotTemperatureThreshold = settings.hotTemperatureThreshold
         nextState.isEnabled = settings.isChargeLimitingEnabled
+        nextState.isSailingModeEnabled = settings.isSailingModeEnabled
+        nextState.isHeatProtectionEnabled = settings.isHeatProtectionEnabled
         return nextState
     }
 }
