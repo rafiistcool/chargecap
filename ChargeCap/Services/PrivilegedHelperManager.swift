@@ -1,7 +1,5 @@
-import AppKit
 import Foundation
 import ServiceManagement
-import Security
 
 @MainActor
 final class PrivilegedHelperManager: ObservableObject {
@@ -50,33 +48,17 @@ final class PrivilegedHelperManager: ObservableObject {
             isInstalled = false
         }
 
-        // Run blessHelper on a background thread so the authorization
-        // dialog doesn't block the main-thread Settings scene lifecycle.
         do {
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                DispatchQueue.global(qos: .userInitiated).async {
-                    do {
-                        try self.blessHelper()
-                        continuation.resume()
-                    } catch {
-                        continuation.resume(throwing: error)
-                    }
-                }
-            }
+            try registerDaemon()
         } catch {
             lastErrorDescription = error.localizedDescription
             throw error
         }
 
-        // Bring the app back to front after the auth dialog dismisses.
-        DispatchQueue.main.async {
-            NSApplication.shared.activate()
-        }
-
-        // Old connection is stale after blessing; force a fresh one.
+        // Old connection is stale after registration; force a fresh one.
         invalidateConnection()
 
-        try await Task.sleep(for: .seconds(1))
+        try await Task.sleep(for: .seconds(2))
 
         do {
             _ = try await getVersion()
@@ -161,47 +143,9 @@ final class PrivilegedHelperManager: ObservableObject {
         return proxy
     }
 
-    nonisolated private func blessHelper() throws {
-        var authItem = kSMRightBlessPrivilegedHelper.withCString {
-            AuthorizationItem(name: $0, valueLength: 0, value: nil, flags: 0)
-        }
-        var authRights = withUnsafeMutablePointer(to: &authItem) {
-            AuthorizationRights(count: 1, items: $0)
-        }
-
-        let authFlags: AuthorizationFlags = [.interactionAllowed, .preAuthorize, .extendRights]
-        var authRef: AuthorizationRef?
-        let status = AuthorizationCreate(&authRights, nil, authFlags, &authRef)
-
-        guard status == errAuthorizationSuccess else {
-            throw HelperError.authorizationFailed(status)
-        }
-
-        var error: Unmanaged<CFError>?
-        let success = SMJobBless(
-            kSMDomainSystemLaunchd,
-            ChargeCapHelperConfiguration.helperIdentifier as CFString,
-            authRef,
-            &error
-        )
-
-        if let authorizationRef = authRef {
-            AuthorizationFree(authorizationRef, [])
-        }
-
-        guard success else {
-            if let cfError = error?.takeRetainedValue() {
-                let domain = CFErrorGetDomain(cfError) as String
-                let code = CFErrorGetCode(cfError)
-                let userInfo = CFErrorCopyUserInfo(cfError) as NSDictionary? ?? [:]
-                let description = CFErrorCopyDescription(cfError) as String? ?? "Unknown"
-                let failureReason = CFErrorCopyFailureReason(cfError) as String? ?? "None"
-                let detail = "SMJobBless failed — domain: \(domain), code: \(code), description: \(description), reason: \(failureReason), userInfo: \(userInfo)"
-                print(detail)
-                throw HelperError.installationFailed(detail)
-            }
-            throw HelperError.installationFailed("Unknown SMJobBless failure")
-        }
+    private func registerDaemon() throws {
+        let service = SMAppService.daemon(plistName: "com.chargecap.Helper.plist")
+        try service.register()
     }
 
     private static let xpcTimeout: TimeInterval = 5
@@ -299,7 +243,6 @@ final class PrivilegedHelperManager: ObservableObject {
     }
 
     enum HelperError: LocalizedError {
-        case authorizationFailed(OSStatus)
         case installationFailed(String)
         case connectionUnavailable
         case versionMismatch(expected: String, actual: String)
@@ -308,8 +251,6 @@ final class PrivilegedHelperManager: ObservableObject {
 
         var errorDescription: String? {
             switch self {
-            case .authorizationFailed(let status):
-                return SecCopyErrorMessageString(status, nil) as String? ?? "Authorization failed (\(status))"
             case .installationFailed(let description):
                 return "Helper install failed: \(description)"
             case .connectionUnavailable:

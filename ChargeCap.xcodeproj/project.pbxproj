@@ -198,6 +198,7 @@
 				CC0000000000000000000120 /* Frameworks */,
 				CC0000000000000000000122 /* Resources */,
 				CC000000000000000000004A /* CopyFiles */,
+				CC0000000000000000000201 /* Copy Helper Launchd Plist */,
 			);
 			buildRules = (
 			);
@@ -293,6 +294,26 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "sed \"s/\\$(DEVELOPMENT_TEAM)/${DEVELOPMENT_TEAM}/g\" \"${SRCROOT}/ChargeCapHelper/Helper-Info.plist\" > \"${DERIVED_FILE_DIR}/Helper-Info.plist\"\n";
+		};
+		CC0000000000000000000201 /* Copy Helper Launchd Plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/ChargeCapHelper/Helper-Launchd.plist",
+			);
+			name = "Copy Helper Launchd Plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/$(WRAPPER_NAME)/Contents/Library/LaunchDaemons/com.chargecap.Helper.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "mkdir -p \"${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/Contents/Library/LaunchDaemons\"\ncp \"${SRCROOT}/ChargeCapHelper/Helper-Launchd.plist\" \"${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/Contents/Library/LaunchDaemons/com.chargecap.Helper.plist\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
