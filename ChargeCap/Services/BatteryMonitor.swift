@@ -8,6 +8,8 @@ final class BatteryMonitor: ObservableObject {
     @Published private(set) var batteryState: BatteryState
 
     private var timer: AnyCancellable?
+    private static let percentageRange = 1...100
+    private static let maxReasonableCapacityMultiplier = 2
 
     init() {
         batteryState = BatteryState.placeholder
@@ -87,12 +89,12 @@ final class BatteryMonitor: ObservableObject {
             ) == KERN_SUCCESS,
                let dict = props?.takeRetainedValue() as? [String: Any]
             {
-                cycleCount     = intValue(in: dict, forKeys: ["CycleCount"]) ?? 0
-                designCapacity = intValue(in: dict, forKeys: ["DesignCapacity"]) ?? 0
+                cycleCount     = firstPositiveIntValue(in: dict, forKeys: ["CycleCount"]) ?? 0
+                designCapacity = firstPositiveIntValue(in: dict, forKeys: ["DesignCapacity"]) ?? 0
                 maxCapacity    = resolvedMaxCapacity(in: dict, designCapacity: designCapacity)
 
                 // Temperature is stored in centidegrees Celsius (e.g. 3800 → 38.00 °C)
-                let tempRaw = intValue(in: dict, forKeys: ["Temperature"]) ?? 0
+                let tempRaw = firstPositiveIntValue(in: dict, forKeys: ["Temperature"]) ?? 0
                 temperature = Double(tempRaw) / 100.0
 
                 healthPercent = resolvedHealthPercent(
@@ -102,7 +104,7 @@ final class BatteryMonitor: ObservableObject {
                 )
 
                 if let adapterDict = dict["AdapterDetails"] as? [String: Any],
-                   let watts = intValue(in: adapterDict, forKeys: ["Watts"])
+                   let watts = firstPositiveIntValue(in: adapterDict, forKeys: ["Watts"])
                 {
                     adapterWattage = watts
                 }
@@ -186,7 +188,7 @@ final class BatteryMonitor: ObservableObject {
         return maxCycles[modelString] ?? 1000
     }
 
-    private static func intValue(in dict: [String: Any], forKeys keys: [String]) -> Int? {
+    private static func firstPositiveIntValue(in dict: [String: Any], forKeys keys: [String]) -> Int? {
         for key in keys {
             if let value = dict[key] as? Int, value > 0 {
                 return value
@@ -201,14 +203,19 @@ final class BatteryMonitor: ObservableObject {
     }
 
     private static func resolvedMaxCapacity(in dict: [String: Any], designCapacity: Int) -> Int {
-        let reportedMaxCapacity = intValue(in: dict, forKeys: ["MaxCapacity"])
-        let rawMaxCapacity = intValue(in: dict, forKeys: ["AppleRawMaxCapacity"])
-        let nominalChargeCapacity = intValue(in: dict, forKeys: ["NominalChargeCapacity"])
+        let reportedMaxCapacity = firstPositiveIntValue(in: dict, forKeys: ["MaxCapacity"])
+        let rawMaxCapacity = firstPositiveIntValue(in: dict, forKeys: ["AppleRawMaxCapacity"])
+        let nominalChargeCapacity = firstPositiveIntValue(in: dict, forKeys: ["NominalChargeCapacity"])
 
         let candidates = [rawMaxCapacity, reportedMaxCapacity, nominalChargeCapacity]
             .compactMap { $0 }
             .filter { candidate in
-                candidate > 100 && (designCapacity == 0 || candidate <= designCapacity * 2)
+                // Real full-charge capacities are reported in mAh and should be comfortably above 100,
+                // while percentage-style fallback values sit in 1...100. The upper bound keeps clearly
+                // bogus readings from being shown if the IORegistry returns an unexpected unit.
+                candidate > Self.percentageRange.upperBound &&
+                    (designCapacity == 0 ||
+                        candidate <= designCapacity * Self.maxReasonableCapacityMultiplier)
             }
 
         if let bestCandidate = candidates.first {
@@ -216,8 +223,8 @@ final class BatteryMonitor: ObservableObject {
         }
 
         let fallbackPercent =
-            intValue(in: dict, forKeys: ["MaximumCapacityPercent"]) ??
-            reportedMaxCapacity.flatMap { (1...100).contains($0) ? $0 : nil }
+            firstPositiveIntValue(in: dict, forKeys: ["MaximumCapacityPercent"]) ??
+            reportedMaxCapacity.flatMap { isPercentageValue($0) ? $0 : nil }
 
         guard designCapacity > 0, let fallbackPercent, fallbackPercent > 0 else { return 0 }
         return Int((Double(designCapacity) * Double(fallbackPercent) / 100.0).rounded())
@@ -228,17 +235,21 @@ final class BatteryMonitor: ObservableObject {
         designCapacity: Int,
         maxCapacity: Int
     ) -> Int {
-        if let healthPercent = intValue(in: dict, forKeys: ["MaximumCapacityPercent"]) {
+        if let healthPercent = firstPositiveIntValue(in: dict, forKeys: ["MaximumCapacityPercent"]) {
             return min(100, healthPercent)
         }
 
-        if let reportedMaxCapacity = intValue(in: dict, forKeys: ["MaxCapacity"]),
-           (1...100).contains(reportedMaxCapacity)
+        if let reportedMaxCapacity = firstPositiveIntValue(in: dict, forKeys: ["MaxCapacity"]),
+           isPercentageValue(reportedMaxCapacity)
         {
             return reportedMaxCapacity
         }
 
         guard designCapacity > 0, maxCapacity > 0 else { return 100 }
         return min(100, Int((Double(maxCapacity) / Double(designCapacity) * 100.0).rounded()))
+    }
+
+    private static func isPercentageValue(_ value: Int) -> Bool {
+        percentageRange.contains(value)
     }
 }
