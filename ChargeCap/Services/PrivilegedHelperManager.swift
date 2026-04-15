@@ -73,13 +73,11 @@ final class PrivilegedHelperManager: ObservableObject {
     }
 
     func enableCharging() async throws {
-        try await writeSMCByte(key: "CH0B", value: 0x00)
-        try? await writeSMCByte(key: "CH0C", value: 0x00)
+        try await setChargingEnabled(true)
     }
 
     func disableCharging() async throws {
-        try await writeSMCByte(key: "CH0B", value: 0x02)
-        try? await writeSMCByte(key: "CH0C", value: 0x02)
+        try await setChargingEnabled(false)
     }
 
     func pauseCharging() async throws {
@@ -224,6 +222,28 @@ final class PrivilegedHelperManager: ObservableObject {
         }
     }
 
+    private func setChargingEnabled(_ enabled: Bool) async throws {
+        guard let helper = helperProxy else {
+            throw HelperError.connectionUnavailable
+        }
+
+        try await withCheckedThrowingContinuation { (raw: CheckedContinuation<Void, Error>) in
+            let continuation = SafeContinuation(raw)
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
+                continuation.resume(throwing: HelperError.connectionUnavailable)
+            }
+
+            helper.setChargingEnabled(enabled) { success, errorDescription in
+                if success {
+                    continuation.resume(returning: ())
+                } else {
+                    continuation.resume(throwing: HelperError.chargingControlFailed(description: errorDescription ?? "Unknown error"))
+                }
+            }
+        }
+    }
+
     private func readSMCUInt32(key: String) async throws -> UInt32 {
         guard let helper = helperProxy else {
             throw HelperError.connectionUnavailable
@@ -252,6 +272,7 @@ final class PrivilegedHelperManager: ObservableObject {
         case versionMismatch(expected: String, actual: String)
         case writeFailed(key: String, description: String)
         case readFailed(key: String, description: String)
+        case chargingControlFailed(description: String)
 
         var errorDescription: String? {
             switch self {
@@ -265,6 +286,8 @@ final class PrivilegedHelperManager: ObservableObject {
                 return "Failed to write \(key): \(description)"
             case .readFailed(let key, let description):
                 return "Failed to read \(key): \(description)"
+            case .chargingControlFailed(let description):
+                return "Charging control failed: \(description)"
             }
         }
     }
