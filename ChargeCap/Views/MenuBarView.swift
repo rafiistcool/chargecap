@@ -186,18 +186,14 @@ struct MenuBarView: View {
 
     private var settingsRow: some View {
         HStack(spacing: 12) {
-            SettingsLink {
+            Button {
+                NSApp.activate()
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            } label: {
                 Label("Settings", systemImage: "gear")
             }
             .buttonStyle(.borderless)
-            .simultaneousGesture(TapGesture().onEnded {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    NSApp.activate()
-                    for window in NSApp.windows where window.title == "Settings" || window.identifier?.rawValue.contains("settings") == true {
-                        window.makeKeyAndOrderFront(nil)
-                    }
-                }
-            })
+            .keyboardShortcut(",", modifiers: .command)
 
             Spacer()
 

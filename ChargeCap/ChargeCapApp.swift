@@ -76,6 +76,9 @@ struct ChargeCapApp: App {
                 .environmentObject(helperManager)
                 .environmentObject(proManager)
                 .environmentObject(chargeController)
+                .onAppear {
+                    NSApp.activate()
+                }
         }
     }
 

@@ -49,12 +49,26 @@ final class PrivilegedHelperManager: ObservableObject {
             isInstalled = false
         }
 
+        // Run blessHelper on a background thread so the authorization
+        // dialog doesn't block the main-thread Settings scene lifecycle.
         do {
-            try blessHelper()
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    do {
+                        try self.blessHelper()
+                        continuation.resume()
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+                }
+            }
         } catch {
             lastErrorDescription = error.localizedDescription
             throw error
         }
+
+        // Old connection is stale after blessing; force a fresh one.
+        invalidateConnection()
 
         try await Task.sleep(for: .seconds(1))
 
@@ -119,6 +133,11 @@ final class PrivilegedHelperManager: ObservableObject {
         }
     }
 
+    private func invalidateConnection() {
+        _connection?.invalidate()
+        _connection = nil
+    }
+
     private var helperProxy: ChargeCapHelperProtocol? {
         let conn = connection
         var proxyError: Error?
@@ -136,7 +155,7 @@ final class PrivilegedHelperManager: ObservableObject {
         return proxy
     }
 
-    private func blessHelper() throws {
+    nonisolated private func blessHelper() throws {
         var authItem = kSMRightBlessPrivilegedHelper.withCString {
             AuthorizationItem(name: $0, valueLength: 0, value: nil, flags: 0)
         }
