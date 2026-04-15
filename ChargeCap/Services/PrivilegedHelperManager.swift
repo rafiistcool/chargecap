@@ -67,6 +67,9 @@ final class PrivilegedHelperManager: ObservableObject {
             throw error
         }
 
+        // Bring the app back to front after the auth dialog dismisses.
+        NSApp.activate()
+
         // Old connection is stale after blessing; force a fresh one.
         invalidateConnection()
 

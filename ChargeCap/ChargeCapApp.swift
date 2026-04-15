@@ -69,7 +69,7 @@ struct ChargeCapApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Settings {
+        Window("ChargeCap Settings", id: "settings") {
             SettingsView()
                 .environmentObject(batteryMonitor)
                 .environmentObject(appSettings)
@@ -80,6 +80,8 @@ struct ChargeCapApp: App {
                     NSApp.activate()
                 }
         }
+        .windowResizability(.contentSize)
+        .defaultLaunchBehavior(.suppressed)
     }
 
     private var menuBarIconName: String {
