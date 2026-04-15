@@ -18,7 +18,7 @@ struct MenuBarView: View {
                 hardwareSection(state)
                 Divider()
             } else {
-                Text("No battery detected.")
+                Label("No battery detected.", systemImage: "desktopcomputer")
                     .foregroundStyle(.secondary)
                     .padding()
                 Divider()
@@ -32,7 +32,9 @@ struct MenuBarView: View {
 
     private var headerRow: some View {
         HStack {
-            Text("ChargeCap ⚡")
+            Image(systemName: "bolt.fill")
+                .foregroundStyle(.yellow)
+            Text("ChargeCap")
                 .font(.headline)
             Spacer()
         }
@@ -44,14 +46,20 @@ struct MenuBarView: View {
     private func chargeSection(_ state: BatteryState) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
-                Text("🔋 \(state.chargePercent)% — \(chargingStatusText(state))")
+                Image(systemName: batteryIconName(for: state))
+                    .foregroundStyle(batteryIconColor(for: state))
+                Text("\(state.chargePercent)% — \(chargingStatusText(state))")
                     .font(.body)
                 Spacer()
             }
             if let timeStr = timeRemainingString(state) {
-                Text("⏱ \(timeStr)")
-                    .foregroundStyle(.secondary)
-                    .font(.subheadline)
+                HStack(spacing: 4) {
+                    Image(systemName: "clock")
+                        .foregroundStyle(.secondary)
+                    Text(timeStr)
+                        .foregroundStyle(.secondary)
+                }
+                .font(.subheadline)
             }
         }
         .padding(.horizontal)
@@ -62,15 +70,21 @@ struct MenuBarView: View {
     private func healthSection(_ state: BatteryState) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
-                Text("❤️ Battery Health")
+                Image(systemName: "heart.fill")
+                    .foregroundStyle(healthColor(for: state.healthPercent))
+                Text("Battery Health")
                 Spacer()
                 Text("\(state.healthPercent)%")
                     .foregroundStyle(healthColor(for: state.healthPercent))
                     .fontWeight(.semibold)
             }
-            Text("Condition: \(state.condition.rawValue)")
-                .foregroundStyle(.secondary)
-                .font(.subheadline)
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.seal")
+                    .foregroundStyle(.secondary)
+                Text("Condition: \(state.condition.rawValue)")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
@@ -80,13 +94,17 @@ struct MenuBarView: View {
     private func cyclesAndTempSection(_ state: BatteryState) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
-                Text("🔄 Cycles")
+                Image(systemName: "arrow.clockwise")
+                    .foregroundStyle(.secondary)
+                Text("Cycles")
                 Spacer()
                 Text("\(state.cycleCount, format: .number) / \(state.maxCycleCount, format: .number)")
                     .foregroundStyle(.secondary)
             }
             HStack {
-                Text("🌡️ Temperature")
+                Image(systemName: "thermometer.medium")
+                    .foregroundStyle(.secondary)
+                Text("Temperature")
                 Spacer()
                 Text(String(format: "%.1f°C", state.temperature))
                     .foregroundStyle(.secondary)
@@ -100,18 +118,24 @@ struct MenuBarView: View {
     private func hardwareSection(_ state: BatteryState) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
-                Text("⚡ Adapter")
+                Image(systemName: "bolt.fill")
+                    .foregroundStyle(.secondary)
+                Text("Adapter")
                 Spacer()
                 Text(adapterText(state))
                     .foregroundStyle(.secondary)
             }
             HStack {
+                Image(systemName: "square.stack")
+                    .foregroundStyle(.secondary)
                 Text("Design capacity")
                 Spacer()
                 Text("\(state.designCapacity, format: .number) mAh")
                     .foregroundStyle(.secondary)
             }
             HStack {
+                Image(systemName: "square.stack.fill")
+                    .foregroundStyle(.secondary)
                 Text("Max capacity")
                 Spacer()
                 Text("\(state.maxCapacity, format: .number) mAh")
@@ -136,6 +160,24 @@ struct MenuBarView: View {
     }
 
     // MARK: - Helpers
+
+    private func batteryIconName(for state: BatteryState) -> String {
+        if state.isCharging { return "battery.100.bolt" }
+        switch state.chargePercent {
+        case 76...100: return "battery.100"
+        case 51...75:  return "battery.75"
+        case 26...50:  return "battery.50"
+        case 1...25:   return "battery.25"
+        default:       return "battery.0"
+        }
+    }
+
+    private func batteryIconColor(for state: BatteryState) -> Color {
+        if state.isCharging { return .green }
+        if state.chargePercent <= 20 { return .red }
+        if state.chargePercent <= 40 { return .orange }
+        return .primary
+    }
 
     private func chargingStatusText(_ state: BatteryState) -> String {
         if state.chargePercent >= 100 { return "Full" }
