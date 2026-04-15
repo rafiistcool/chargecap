@@ -190,6 +190,14 @@ struct MenuBarView: View {
                 Label("Settings", systemImage: "gear")
             }
             .buttonStyle(.borderless)
+            .simultaneousGesture(TapGesture().onEnded {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    NSApp.activate()
+                    for window in NSApp.windows where window.title == "Settings" || window.identifier?.rawValue.contains("settings") == true {
+                        window.makeKeyAndOrderFront(nil)
+                    }
+                }
+            })
 
             Spacer()
 
