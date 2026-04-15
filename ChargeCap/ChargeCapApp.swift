@@ -7,5 +7,9 @@ struct ChargeCapApp: App {
             MenuBarView()
         }
         .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsView()
+        }
     }
 }
