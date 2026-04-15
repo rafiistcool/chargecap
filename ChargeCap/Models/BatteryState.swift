@@ -38,6 +38,9 @@ struct BatteryState {
     /// Current charge limit set by ChargeCap (nil = no limit / Pro feature).
     var chargeLimit: Int?
 
+    /// Instantaneous battery rate from SMC when available.
+    var batteryRate: Int?
+
     // MARK: - Time estimates
 
     /// Minutes until fully charged (valid only when charging; 0 if unavailable).
@@ -76,6 +79,9 @@ struct BatteryState {
     /// AC adapter wattage (0 if not connected or unavailable).
     var adapterWattage: Int
 
+    /// Whether charge limiting is currently inhibiting charging.
+    var isChargeInhibited: Bool
+
     // MARK: - Availability
 
     /// True for MacBooks; false for desktop Macs that have no battery.
@@ -103,6 +109,7 @@ struct BatteryState {
         isCharging: true,
         isPluggedIn: true,
         chargeLimit: nil,
+        batteryRate: 0,
         timeToFull: 65,
         timeToEmpty: 0,
         healthPercent: 94,
@@ -113,6 +120,7 @@ struct BatteryState {
         designCapacity: 5103,
         maxCapacity: 4797,
         adapterWattage: 61,
+        isChargeInhibited: false,
         hasBattery: true
     )
 
@@ -121,6 +129,7 @@ struct BatteryState {
         isCharging: false,
         isPluggedIn: true,
         chargeLimit: nil,
+        batteryRate: nil,
         timeToFull: 0,
         timeToEmpty: 0,
         healthPercent: 0,
@@ -131,6 +140,7 @@ struct BatteryState {
         designCapacity: 0,
         maxCapacity: 0,
         adapterWattage: 0,
+        isChargeInhibited: false,
         hasBattery: false
     )
 }

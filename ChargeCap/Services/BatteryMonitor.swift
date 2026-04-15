@@ -7,6 +7,14 @@ import IOKit.ps
 final class BatteryMonitor: ObservableObject {
     @Published private(set) var batteryState: BatteryState
 
+    @Published private(set) var smcBatteryRate: Int?
+
+    @Published private(set) var smcBatteryTemperature: Double?
+
+    @Published private(set) var isChargeInhibited = false
+
+    @Published private(set) var activeChargeLimit: Int?
+
     private var timer: AnyCancellable?
     private static let percentageRange = 1...100
     private static let maxReasonableCapacityMultiplier = 2
@@ -21,9 +29,37 @@ final class BatteryMonitor: ObservableObject {
 
     /// Refresh battery state from the system on a background thread.
     func refresh() {
+        let currentChargeLimit = activeChargeLimit
+        let currentChargeInhibited = isChargeInhibited
+        let currentSMCBatteryRate = smcBatteryRate
+        let currentSMCBatteryTemperature = smcBatteryTemperature
+
         Task.detached(priority: .utility) { [weak self] in
             let state = Self.readBatteryState()
-            await MainActor.run { self?.batteryState = state }
+            await self?.applyRefreshedState(
+                state,
+                chargeLimit: currentChargeLimit,
+                isChargeInhibited: currentChargeInhibited,
+                smcBatteryRate: currentSMCBatteryRate,
+                smcBatteryTemperature: currentSMCBatteryTemperature
+            )
+        }
+    }
+
+    func updateChargeMetadata(limit: Int?, isChargeInhibited: Bool) {
+        activeChargeLimit = limit
+        self.isChargeInhibited = isChargeInhibited
+        batteryState.chargeLimit = limit
+        batteryState.isChargeInhibited = isChargeInhibited
+    }
+
+    func updateSMCReadings(batteryRate: Int?, temperature: Double?) {
+        smcBatteryRate = batteryRate
+        smcBatteryTemperature = temperature
+        batteryState.batteryRate = batteryRate
+
+        if let temperature {
+            batteryState.temperature = temperature
         }
     }
 
@@ -119,6 +155,7 @@ final class BatteryMonitor: ObservableObject {
             isCharging:     isCharging,
             isPluggedIn:    isPluggedIn,
             chargeLimit:    nil,
+            batteryRate:    nil,
             // IOKit returns -1 for time values when the estimate is still calculating;
             // max(0, ...) converts that sentinel to 0 (meaning "unavailable").
             timeToFull:     max(0, timeToFull),
@@ -131,8 +168,29 @@ final class BatteryMonitor: ObservableObject {
             designCapacity: designCapacity,
             maxCapacity:    maxCapacity,
             adapterWattage: adapterWattage,
+            isChargeInhibited: false,
             hasBattery:     true
         )
+    }
+
+    @MainActor
+    private func applyRefreshedState(
+        _ state: BatteryState,
+        chargeLimit: Int?,
+        isChargeInhibited: Bool,
+        smcBatteryRate: Int?,
+        smcBatteryTemperature: Double?
+    ) {
+        var mergedState = state
+        mergedState.chargeLimit = chargeLimit
+        mergedState.isChargeInhibited = isChargeInhibited
+        mergedState.batteryRate = smcBatteryRate
+
+        if let smcBatteryTemperature {
+            mergedState.temperature = smcBatteryTemperature
+        }
+
+        batteryState = mergedState
     }
 
     /// Returns the maximum recommended battery cycle count for the current Mac model.
