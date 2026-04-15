@@ -79,9 +79,24 @@ final class PrivilegedHelperManager: ObservableObject {
     func resetModifiedKeys() async {
         guard let helper = helperProxy else { return }
 
-        await withCheckedContinuation { continuation in
-            helper.resetModifiedKeys {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            var hasResumed = false
+
+            func finish() -> Void {
+                guard !hasResumed else { return }
+                hasResumed = true
                 continuation.resume()
+            }
+
+            helper.resetModifiedKeys {
+                Task { @MainActor in
+                    finish()
+                }
+            }
+
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                finish()
             }
         }
     }

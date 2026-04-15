@@ -1,7 +1,28 @@
 import SwiftUI
 
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    var helperManager: PrivilegedHelperManager?
+
+    private var isHandlingTermination = false
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard !isHandlingTermination else { return .terminateNow }
+        guard let helperManager else { return .terminateNow }
+
+        isHandlingTermination = true
+
+        Task { @MainActor in
+            await helperManager.resetModifiedKeys()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+
+        return .terminateLater
+    }
+}
+
 @main
 struct ChargeCapApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var batteryMonitor = BatteryMonitor()
     @StateObject private var appSettings = AppSettings()
     @StateObject private var helperManager = PrivilegedHelperManager()
@@ -26,6 +47,8 @@ struct ChargeCapApp: App {
                 proManager: proManager
             )
         )
+
+        appDelegate.helperManager = helperManager
     }
 
     var body: some Scene {
