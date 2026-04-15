@@ -1,15 +1,21 @@
+import AppKit
 import SwiftUI
 
 struct MenuBarView: View {
     @EnvironmentObject private var monitor: BatteryMonitor
+    @EnvironmentObject private var controller: ChargeController
+    @EnvironmentObject private var proManager: ProManager
 
     var body: some View {
         let state = monitor.batteryState
+        let chargeControlState = controller.state
         VStack(alignment: .leading, spacing: 0) {
             headerRow
             Divider()
             if state.hasBattery {
-                chargeSection(state)
+                chargeSection(state, controlState: chargeControlState)
+                Divider()
+                chargeLimitSection(state, controlState: chargeControlState)
                 Divider()
                 healthSection(state)
                 Divider()
@@ -43,10 +49,10 @@ struct MenuBarView: View {
     }
 
     @ViewBuilder
-    private func chargeSection(_ state: BatteryState) -> some View {
+    private func chargeSection(_ state: BatteryState, controlState: ChargeControlState) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
-                Image(systemName: state.batteryIconName)
+                Image(systemName: batteryIconName(for: state, controlState: controlState))
                     .foregroundStyle(batteryIconColor(for: state))
                 Text("\(state.chargePercent)% — \(chargingStatusText(state))")
                     .font(.body)
@@ -60,6 +66,37 @@ struct MenuBarView: View {
                         .foregroundStyle(.secondary)
                 }
                 .font(.subheadline)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private func chargeLimitSection(_ state: BatteryState, controlState: ChargeControlState) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: controlState.status.isSailing ? "sailboat.fill" : "bolt.badge.clock.fill")
+                    .foregroundStyle(controlState.isLimiting ? .orange : .secondary)
+                Text("Charge Limiting")
+                Spacer()
+                if proManager.hasUnlockedPro {
+                    Text(controlState.isEnabled ? "On" : "Off")
+                        .foregroundStyle(controlState.isEnabled ? .green : .secondary)
+                } else {
+                    Text("Pro")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Text(controlState.status.description)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            if let chargeLimit = state.chargeLimit {
+                Text("Limit \(chargeLimit)% • Resume \(controlState.resumeThreshold)%")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal)
@@ -148,14 +185,23 @@ struct MenuBarView: View {
     }
 
     private var settingsRow: some View {
-        HStack {
-            Spacer()
+        HStack(spacing: 12) {
             SettingsLink {
                 Label("Settings", systemImage: "gear")
             }
             .buttonStyle(.borderless)
+
             Spacer()
+
+            Button {
+                NSApplication.shared.terminate(nil)
+            } label: {
+                Label("Quit", systemImage: "power")
+            }
+            .buttonStyle(.borderless)
+            .keyboardShortcut("q")
         }
+        .padding(.horizontal)
         .padding(.vertical, 8)
     }
 
@@ -170,9 +216,18 @@ struct MenuBarView: View {
 
     private func chargingStatusText(_ state: BatteryState) -> String {
         if state.chargePercent >= 100 { return "Full" }
+        if state.isChargeInhibited { return "Not Charging" }
         if state.isCharging { return "Charging" }
         if state.isPluggedIn { return "AC Power" }
         return "On Battery"
+    }
+
+    private func batteryIconName(for state: BatteryState, controlState: ChargeControlState) -> String {
+        if controlState.isLimiting {
+            return controlState.isSailing ? "battery.100.bolt.rtl" : "bolt.slash.fill"
+        }
+
+        return state.batteryIconName
     }
 
     private func timeRemainingString(_ state: BatteryState) -> String? {
@@ -209,6 +264,19 @@ struct MenuBarView: View {
 }
 
 #Preview {
+    let monitor = BatteryMonitor()
+    let settings = AppSettings()
+    let helperManager = PrivilegedHelperManager()
+    let proManager = ProManager()
+    let controller = ChargeController(
+        monitor: monitor,
+        settings: settings,
+        helperManager: helperManager,
+        proManager: proManager
+    )
+
     MenuBarView()
-        .environmentObject(BatteryMonitor())
+        .environmentObject(monitor)
+        .environmentObject(controller)
+        .environmentObject(proManager)
 }

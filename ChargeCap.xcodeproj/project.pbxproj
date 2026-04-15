@@ -16,7 +16,33 @@
 		CC0000000000000000000020 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000030 /* Constants.swift */; };
 		CC0000000000000000000021 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000031 /* Assets.xcassets */; };
 		CC0000000000000000000024 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000033 /* IOKit.framework */; };
+		CC0000000000000000000025 /* ServiceManagement.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000034 /* ServiceManagement.framework */; };
+		CC0000000000000000000026 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000035 /* StoreKit.framework */; };
+		CC0000000000000000000027 /* ChargeControlModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000036 /* ChargeControlModels.swift */; };
+		CC0000000000000000000028 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000037 /* AppSettings.swift */; };
+		CC0000000000000000000029 /* ProManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000038 /* ProManager.swift */; };
+		CC0000000000000000000101 /* PrivilegedHelperManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000111 /* PrivilegedHelperManager.swift */; };
+		CC0000000000000000000102 /* ChargeCapHelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000113 /* ChargeCapHelperProtocol.swift */; };
+		CC0000000000000000000103 /* ChargeCapHelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000113 /* ChargeCapHelperProtocol.swift */; };
+		CC0000000000000000000104 /* ChargeCapHelper in CopyFiles */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000112 /* ChargeCapHelper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		CC0000000000000000000105 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000114 /* main.swift */; };
+		CC0000000000000000000106 /* HelperTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000115 /* HelperTool.swift */; };
+		CC0000000000000000000107 /* SMC.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000116 /* SMC.swift */; };
+		FDF8B4AC2F8FF964008B977E /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000033 /* IOKit.framework */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		CC000000000000000000004A /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Library/LaunchServices;
+			dstSubfolderSpec = 1;
+			files = (
+				CC0000000000000000000104 /* ChargeCapHelper in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		CC0000000000000000000022 /* ChargeCap.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChargeCap.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -30,14 +56,37 @@
 		CC0000000000000000000031 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CC0000000000000000000032 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		CC0000000000000000000033 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
+		CC0000000000000000000034 /* ServiceManagement.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ServiceManagement.framework; path = System/Library/Frameworks/ServiceManagement.framework; sourceTree = SDKROOT; };
+		CC0000000000000000000035 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
+		CC0000000000000000000036 /* ChargeControlModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChargeControlModels.swift; sourceTree = "<group>"; };
+		CC0000000000000000000037 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		CC0000000000000000000038 /* ProManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProManager.swift; sourceTree = "<group>"; };
+		CC0000000000000000000111 /* PrivilegedHelperManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivilegedHelperManager.swift; sourceTree = "<group>"; };
+		CC0000000000000000000112 /* ChargeCapHelper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ChargeCapHelper; sourceTree = BUILT_PRODUCTS_DIR; };
+		CC0000000000000000000113 /* ChargeCapHelperProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChargeCapHelperProtocol.swift; sourceTree = "<group>"; };
+		CC0000000000000000000114 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		CC0000000000000000000115 /* HelperTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperTool.swift; sourceTree = "<group>"; };
+		CC0000000000000000000116 /* SMC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMC.swift; sourceTree = "<group>"; };
+		CC0000000000000000000117 /* Helper-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Helper-Info.plist"; sourceTree = "<group>"; };
+		CC0000000000000000000118 /* Helper-Launchd.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Helper-Launchd.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		CC0000000000000000000040 /* Frameworks */ = {
+		CC000000000000000000004D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FDF8B4AC2F8FF964008B977E /* IOKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CC0000000000000000000120 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				CC0000000000000000000024 /* IOKit.framework in Frameworks */,
+				CC0000000000000000000025 /* ServiceManagement.framework in Frameworks */,
+				CC0000000000000000000026 /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -62,15 +111,20 @@
 			isa = PBXGroup;
 			children = (
 				CC0000000000000000000022 /* ChargeCap.app */,
+				CC0000000000000000000112 /* ChargeCapHelper */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		CC0000000000000000000052 /* Root */ = {
+		CC0000000000000000000052 = {
 			isa = PBXGroup;
 			children = (
+				CC0000000000000000000064 /* Shared */,
 				CC0000000000000000000050 /* ChargeCap */,
+				CC0000000000000000000065 /* ChargeCapHelper */,
 				CC0000000000000000000033 /* IOKit.framework */,
+				CC0000000000000000000034 /* ServiceManagement.framework */,
+				CC0000000000000000000035 /* StoreKit.framework */,
 				CC0000000000000000000051 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -79,6 +133,7 @@
 			isa = PBXGroup;
 			children = (
 				CC000000000000000000002B /* BatteryState.swift */,
+				CC0000000000000000000036 /* ChargeControlModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -95,8 +150,11 @@
 		CC0000000000000000000062 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				CC0000000000000000000037 /* AppSettings.swift */,
 				CC000000000000000000002E /* BatteryMonitor.swift */,
 				CC000000000000000000002F /* ChargeController.swift */,
+				CC0000000000000000000111 /* PrivilegedHelperManager.swift */,
+				CC0000000000000000000038 /* ProManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -109,6 +167,26 @@
 			path = Helpers;
 			sourceTree = "<group>";
 		};
+		CC0000000000000000000064 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				CC0000000000000000000113 /* ChargeCapHelperProtocol.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		CC0000000000000000000065 /* ChargeCapHelper */ = {
+			isa = PBXGroup;
+			children = (
+				CC0000000000000000000114 /* main.swift */,
+				CC0000000000000000000115 /* HelperTool.swift */,
+				CC0000000000000000000116 /* SMC.swift */,
+				CC0000000000000000000117 /* Helper-Info.plist */,
+				CC0000000000000000000118 /* Helper-Launchd.plist */,
+			);
+			path = ChargeCapHelper;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -116,9 +194,10 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = CC0000000000000000000080 /* Build configuration list for PBXNativeTarget "ChargeCap" */;
 			buildPhases = (
-				CC0000000000000000000041 /* Sources */,
-				CC0000000000000000000040 /* Frameworks */,
-				CC0000000000000000000042 /* Resources */,
+				CC0000000000000000000121 /* Sources */,
+				CC0000000000000000000120 /* Frameworks */,
+				CC0000000000000000000122 /* Resources */,
+				CC000000000000000000004A /* CopyFiles */,
 			);
 			buildRules = (
 			);
@@ -129,6 +208,23 @@
 			productReference = CC0000000000000000000022 /* ChargeCap.app */;
 			productType = "com.apple.product-type.application";
 		};
+		CC0000000000000000000071 /* ChargeCapHelper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CC0000000000000000000082 /* Build configuration list for PBXNativeTarget "ChargeCapHelper" */;
+			buildPhases = (
+				CC0000000000000000000200 /* Preprocess Helper-Info.plist */,
+				CC000000000000000000004E /* Sources */,
+				CC000000000000000000004D /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ChargeCapHelper;
+			productName = ChargeCapHelper;
+			productReference = CC0000000000000000000112 /* ChargeCapHelper */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -137,9 +233,12 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					CC0000000000000000000070 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					CC0000000000000000000071 = {
 						CreatedOnToolsVersion = 15.0;
 					};
 				};
@@ -152,18 +251,19 @@
 				en,
 				Base,
 			);
-			mainGroup = CC0000000000000000000052 /* Root */;
+			mainGroup = CC0000000000000000000052;
 			productRefGroup = CC0000000000000000000051 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				CC0000000000000000000070 /* ChargeCap */,
+				CC0000000000000000000071 /* ChargeCapHelper */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		CC0000000000000000000042 /* Resources */ = {
+		CC0000000000000000000122 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -174,21 +274,60 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		CC0000000000000000000041 /* Sources */ = {
+		CC000000000000000000004E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CC0000000000000000000105 /* main.swift in Sources */,
+				CC0000000000000000000106 /* HelperTool.swift in Sources */,
+				CC0000000000000000000107 /* SMC.swift in Sources */,
+				CC0000000000000000000103 /* ChargeCapHelperProtocol.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CC0000000000000000000121 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				CC000000000000000000001A /* ChargeCapApp.swift in Sources */,
 				CC000000000000000000001B /* BatteryState.swift in Sources */,
+				CC0000000000000000000027 /* ChargeControlModels.swift in Sources */,
 				CC000000000000000000001C /* MenuBarView.swift in Sources */,
 				CC000000000000000000001D /* SettingsView.swift in Sources */,
+				CC0000000000000000000028 /* AppSettings.swift in Sources */,
 				CC000000000000000000001E /* BatteryMonitor.swift in Sources */,
 				CC000000000000000000001F /* ChargeController.swift in Sources */,
+				CC0000000000000000000101 /* PrivilegedHelperManager.swift in Sources */,
+				CC0000000000000000000029 /* ProManager.swift in Sources */,
 				CC0000000000000000000020 /* Constants.swift in Sources */,
+				CC0000000000000000000102 /* ChargeCapHelperProtocol.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		CC0000000000000000000200 /* Preprocess Helper-Info.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/ChargeCapHelper/Helper-Info.plist",
+			);
+			name = "Preprocess Helper-Info.plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Helper-Info.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "sed \"s/\\$(DEVELOPMENT_TEAM)/${DEVELOPMENT_TEAM}/g\" \"${SRCROOT}/ChargeCapHelper/Helper-Info.plist\" > \"${DERIVED_FILE_DIR}/Helper-Info.plist\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
 		CC00000000000000000000A0 /* Debug */ = {
@@ -215,6 +354,7 @@
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
 				CLANG_WARN_OBJC_IMPLICIT_RETAIN_CYCLE = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
@@ -224,7 +364,9 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_EXCEPTION = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -249,6 +391,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -278,6 +421,7 @@
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
 				CLANG_WARN_OBJC_IMPLICIT_RETAIN_CYCLE = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
@@ -287,7 +431,9 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_EXCEPTION = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -304,6 +450,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 			};
 			name = Release;
@@ -314,9 +461,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ChargeCap/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -337,9 +487,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ChargeCap/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -350,6 +503,64 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.chargecap.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		CC00000000000000000000A4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "ChargeCapHelper/Helper-Info.plist";
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-sectcreate",
+					__TEXT,
+					__info_plist,
+					"$(DERIVED_FILE_DIR)/Helper-Info.plist",
+					"-sectcreate",
+					__TEXT,
+					__launchd_plist,
+					"$(SRCROOT)/ChargeCapHelper/Helper-Launchd.plist",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.chargecap.Helper;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		CC00000000000000000000A5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "ChargeCapHelper/Helper-Info.plist";
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-sectcreate",
+					__TEXT,
+					__info_plist,
+					"$(DERIVED_FILE_DIR)/Helper-Info.plist",
+					"-sectcreate",
+					__TEXT,
+					__launchd_plist,
+					"$(SRCROOT)/ChargeCapHelper/Helper-Launchd.plist",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.chargecap.Helper;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.9;
 			};
 			name = Release;
@@ -375,8 +586,16 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		CC0000000000000000000082 /* Build configuration list for PBXNativeTarget "ChargeCapHelper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CC00000000000000000000A4 /* Debug */,
+				CC00000000000000000000A5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
-
 	};
 	rootObject = CC0000000000000000000090 /* Project object */;
 }
