@@ -115,7 +115,10 @@ enum SMCKit {
     static func open() throws {
         if connection != 0 { return }
 
-        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
+        var service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMCKeysEndpoint"))
+        if service == 0 {
+            service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
+        }
         if service == 0 {
             throw SMCError.driverNotFound
         }
