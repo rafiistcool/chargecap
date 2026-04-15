@@ -1,5 +1,6 @@
 import Foundation
 import ServiceManagement
+import Security
 
 @MainActor
 final class PrivilegedHelperManager: ObservableObject {
@@ -124,10 +125,37 @@ final class PrivilegedHelperManager: ObservableObject {
     }
 
     private func blessHelper() throws {
-        let service = SMAppService.daemon(
-            plistName: "Helper-Launchd.plist"
+        var authItem = kSMRightBlessPrivilegedHelper.withCString {
+            AuthorizationItem(name: $0, valueLength: 0, value: nil, flags: 0)
+        }
+        var authRights = withUnsafeMutablePointer(to: &authItem) {
+            AuthorizationRights(count: 1, items: $0)
+        }
+
+        let authFlags: AuthorizationFlags = [.interactionAllowed, .preAuthorize, .extendRights]
+        var authRef: AuthorizationRef?
+        let status = AuthorizationCreate(&authRights, nil, authFlags, &authRef)
+
+        guard status == errAuthorizationSuccess else {
+            throw HelperError.authorizationFailed(status)
+        }
+
+        var error: Unmanaged<CFError>?
+        let success = SMJobBless(
+            kSMDomainSystemLaunchd,
+            ChargeCapHelperConfiguration.helperIdentifier as CFString,
+            authRef,
+            &error
         )
-        try service.register()
+
+        if let authorizationRef = authRef {
+            AuthorizationFree(authorizationRef, [])
+        }
+
+        guard success else {
+            let errorDescription = error?.takeRetainedValue().localizedDescription ?? "Unknown SMJobBless failure"
+            throw HelperError.installationFailed(errorDescription)
+        }
     }
 
     private static let xpcTimeout: Duration = .seconds(5)
@@ -220,6 +248,7 @@ final class PrivilegedHelperManager: ObservableObject {
     }
 
     enum HelperError: LocalizedError {
+        case authorizationFailed(OSStatus)
         case installationFailed(String)
         case connectionUnavailable
         case versionMismatch(expected: String, actual: String)
@@ -228,6 +257,8 @@ final class PrivilegedHelperManager: ObservableObject {
 
         var errorDescription: String? {
             switch self {
+            case .authorizationFailed(let status):
+                return SecCopyErrorMessageString(status, nil) as String? ?? "Authorization failed (\(status))"
             case .installationFailed(let description):
                 return "Helper install failed: \(description)"
             case .connectionUnavailable:

@@ -4,8 +4,6 @@
 <dict>
 	<key>Label</key>
 	<string>com.chargecap.Helper</string>
-	<key>BundleProgram</key>
-	<string>Library/LaunchServices/com.chargecap.Helper</string>
 	<key>MachServices</key>
 	<dict>
 		<key>com.chargecap.Helper.mach</key>

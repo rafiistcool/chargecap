@@ -25,7 +25,6 @@
 		CC0000000000000000000102 /* ChargeCapHelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000113 /* ChargeCapHelperProtocol.swift */; };
 		CC0000000000000000000103 /* ChargeCapHelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000113 /* ChargeCapHelperProtocol.swift */; };
 		CC0000000000000000000104 /* ChargeCapHelper in CopyFiles */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000112 /* ChargeCapHelper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		CC0000000000000000000300 /* Helper-Launchd.plist in CopyFiles */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000118 /* Helper-Launchd.plist */; };
 		CC0000000000000000000105 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000114 /* main.swift */; };
 		CC0000000000000000000106 /* HelperTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000115 /* HelperTool.swift */; };
 		CC0000000000000000000107 /* SMC.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000116 /* SMC.swift */; };
@@ -40,16 +39,6 @@
 			dstSubfolderSpec = 1;
 			files = (
 				CC0000000000000000000104 /* ChargeCapHelper in CopyFiles */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		CC0000000000000000000301 /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = Contents/Library/LaunchDaemons;
-			dstSubfolderSpec = 1;
-			files = (
-				CC0000000000000000000300 /* Helper-Launchd.plist in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -209,7 +198,6 @@
 				CC0000000000000000000120 /* Frameworks */,
 				CC0000000000000000000122 /* Resources */,
 				CC000000000000000000004A /* CopyFiles */,
-				CC0000000000000000000301 /* CopyFiles */,
 			);
 			buildRules = (
 			);
