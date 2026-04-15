@@ -182,7 +182,9 @@ final class PrivilegedHelperManager: ObservableObject {
                 throw HelperError.connectionUnavailable
             }
 
-            let result = try await group.next()!
+            guard let result = try await group.next() else {
+                throw HelperError.connectionUnavailable
+            }
             group.cancelAll()
             return result
         }
@@ -237,7 +239,9 @@ final class PrivilegedHelperManager: ObservableObject {
                 throw HelperError.connectionUnavailable
             }
 
-            let result = try await group.next()!
+            guard let result = try await group.next() else {
+                throw HelperError.connectionUnavailable
+            }
             group.cancelAll()
             return result
         }
