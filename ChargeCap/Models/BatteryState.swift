@@ -1,7 +1,7 @@
 import Foundation
 
 /// Battery health condition as reported by IOKit.
-enum BatteryCondition: String {
+enum BatteryCondition: String, Equatable {
     case normal = "Normal"
     case serviceRecommended = "Service Recommended"
     case replaceSoon = "Replace Soon"
@@ -23,7 +23,7 @@ enum BatteryCondition: String {
 }
 
 /// Data model representing the current state of the battery.
-struct BatteryState {
+struct BatteryState: Equatable {
     // MARK: - Basic status
 
     /// Current charge level as a percentage (0–100).

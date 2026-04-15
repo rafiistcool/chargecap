@@ -47,19 +47,41 @@ final class BatteryMonitor: ObservableObject {
     }
 
     func updateChargeMetadata(limit: Int?, isChargeInhibited: Bool) {
-        activeChargeLimit = limit
-        self.isChargeInhibited = isChargeInhibited
-        batteryState.chargeLimit = limit
-        batteryState.isChargeInhibited = isChargeInhibited
+        if activeChargeLimit != limit {
+            activeChargeLimit = limit
+        }
+
+        if self.isChargeInhibited != isChargeInhibited {
+            self.isChargeInhibited = isChargeInhibited
+        }
+
+        var nextState = batteryState
+        nextState.chargeLimit = limit
+        nextState.isChargeInhibited = isChargeInhibited
+
+        if nextState != batteryState {
+            batteryState = nextState
+        }
     }
 
     func updateSMCReadings(batteryRate: Int?, temperature: Double?) {
-        smcBatteryRate = batteryRate
-        smcBatteryTemperature = temperature
-        batteryState.batteryRate = batteryRate
+        if smcBatteryRate != batteryRate {
+            smcBatteryRate = batteryRate
+        }
+
+        if smcBatteryTemperature != temperature {
+            smcBatteryTemperature = temperature
+        }
+
+        var nextState = batteryState
+        nextState.batteryRate = batteryRate
 
         if let temperature {
-            batteryState.temperature = temperature
+            nextState.temperature = temperature
+        }
+
+        if nextState != batteryState {
+            batteryState = nextState
         }
     }
 
@@ -190,7 +212,9 @@ final class BatteryMonitor: ObservableObject {
             mergedState.temperature = smcBatteryTemperature
         }
 
-        batteryState = mergedState
+        if batteryState != mergedState {
+            batteryState = mergedState
+        }
     }
 
     /// Returns the maximum recommended battery cycle count for the current Mac model.

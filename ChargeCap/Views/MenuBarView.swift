@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct MenuBarView: View {
@@ -184,14 +185,23 @@ struct MenuBarView: View {
     }
 
     private var settingsRow: some View {
-        HStack {
-            Spacer()
+        HStack(spacing: 12) {
             SettingsLink {
                 Label("Settings", systemImage: "gear")
             }
             .buttonStyle(.borderless)
+
             Spacer()
+
+            Button {
+                NSApplication.shared.terminate(nil)
+            } label: {
+                Label("Quit", systemImage: "power")
+            }
+            .buttonStyle(.borderless)
+            .keyboardShortcut("q")
         }
+        .padding(.horizontal)
         .padding(.vertical, 8)
     }
 
