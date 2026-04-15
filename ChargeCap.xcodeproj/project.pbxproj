@@ -70,17 +70,9 @@
 			isa = PBXGroup;
 			children = (
 				CC0000000000000000000050 /* ChargeCap */,
-				CC0000000000000000000053 /* Frameworks */,
+				CC0000000000000000000033 /* IOKit.framework */,
 				CC0000000000000000000051 /* Products */,
 			);
-			sourceTree = "<group>";
-		};
-		CC0000000000000000000053 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				CC0000000000000000000033 /* IOKit.framework */,
-			);
-			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		CC0000000000000000000060 /* Models */ = {
