@@ -17,17 +17,25 @@ final class BatteryMonitor: ObservableObject {
             .sink { [weak self] _ in self?.refresh() }
     }
 
-    /// Refresh battery state from the system.
+    /// Refresh battery state from the system on a background thread.
     func refresh() {
-        batteryState = Self.readBatteryState()
+        Task.detached(priority: .utility) { [weak self] in
+            let state = Self.readBatteryState()
+            await MainActor.run { self?.batteryState = state }
+        }
     }
 
     // MARK: - Private reading logic
 
     private static func readBatteryState() -> BatteryState {
         // ── 1. IOKit Power Sources API ──────────────────────────────────────
-        let snapshot = IOPSCopyPowerSourcesInfo().takeRetainedValue()
-        let sourcesList = IOPSCopyPowerSourcesList(snapshot).takeRetainedValue() as [CFTypeRef]
+        guard let rawInfo = IOPSCopyPowerSourcesInfo()?.takeRetainedValue() else {
+            return .noBattery
+        }
+        guard let rawList = IOPSCopyPowerSourcesList(rawInfo)?.takeRetainedValue() else {
+            return .noBattery
+        }
+        let sourcesList = rawList as [CFTypeRef]
 
         var chargePercent = 0
         var isCharging    = false
@@ -39,7 +47,7 @@ final class BatteryMonitor: ObservableObject {
 
         for source in sourcesList {
             guard
-                let desc = IOPSGetPowerSourceDescription(snapshot, source)?
+                let desc = IOPSGetPowerSourceDescription(rawInfo, source)?
                     .takeUnretainedValue() as? [String: Any],
                 let type = desc[kIOPSTypeKey] as? String,
                 type == kIOPSInternalBatteryType
