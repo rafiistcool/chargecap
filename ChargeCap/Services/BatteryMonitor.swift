@@ -22,6 +22,10 @@ final class BatteryMonitor: ObservableObject {
     init() {
         batteryState = BatteryState.placeholder
         refresh()
+        startTimer()
+    }
+
+    private func startTimer() {
         timer = Timer.publish(every: Constants.refreshInterval, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in self?.refresh() }
