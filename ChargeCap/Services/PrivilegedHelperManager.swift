@@ -190,8 +190,17 @@ final class PrivilegedHelperManager: ObservableObject {
         }
 
         guard success else {
-            let errorDescription = error?.takeRetainedValue().localizedDescription ?? "Unknown SMJobBless failure"
-            throw HelperError.installationFailed(errorDescription)
+            if let cfError = error?.takeRetainedValue() {
+                let domain = CFErrorGetDomain(cfError) as String
+                let code = CFErrorGetCode(cfError)
+                let userInfo = CFErrorCopyUserInfo(cfError) as NSDictionary? ?? [:]
+                let description = CFErrorCopyDescription(cfError) as String? ?? "Unknown"
+                let failureReason = CFErrorCopyFailureReason(cfError) as String? ?? "None"
+                let detail = "SMJobBless failed — domain: \(domain), code: \(code), description: \(description), reason: \(failureReason), userInfo: \(userInfo)"
+                print(detail)
+                throw HelperError.installationFailed(detail)
+            }
+            throw HelperError.installationFailed("Unknown SMJobBless failure")
         }
     }
 
