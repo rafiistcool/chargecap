@@ -186,14 +186,13 @@ struct MenuBarView: View {
 
     private var settingsRow: some View {
         HStack(spacing: 12) {
-            Button {
-                NSApp.activate()
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-            } label: {
+            SettingsLink {
                 Label("Settings", systemImage: "gear")
             }
             .buttonStyle(.borderless)
-            .keyboardShortcut(",", modifiers: .command)
+            .simultaneousGesture(TapGesture().onEnded {
+                NSApp.activate()
+            })
 
             Spacer()
 
