@@ -46,7 +46,7 @@ struct MenuBarView: View {
     private func chargeSection(_ state: BatteryState) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
-                Image(systemName: batteryIconName(for: state))
+                Image(systemName: state.batteryIconName)
                     .foregroundStyle(batteryIconColor(for: state))
                 Text("\(state.chargePercent)% — \(chargingStatusText(state))")
                     .font(.body)
@@ -161,22 +161,11 @@ struct MenuBarView: View {
 
     // MARK: - Helpers
 
-    private func batteryIconName(for state: BatteryState) -> String {
-        if state.isCharging { return "battery.100.bolt" }
-        switch state.chargePercent {
-        case 76...100: return "battery.100"
-        case 51...75:  return "battery.75"
-        case 26...50:  return "battery.50"
-        case 1...25:   return "battery.25"
-        default:       return "battery.0"
-        }
-    }
-
     private func batteryIconColor(for state: BatteryState) -> Color {
         if state.isCharging { return .green }
         if state.chargePercent <= 20 { return .red }
         if state.chargePercent <= 40 { return .orange }
-        return .primary
+        return .green
     }
 
     private func chargingStatusText(_ state: BatteryState) -> String {
