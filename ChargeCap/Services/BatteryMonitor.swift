@@ -89,22 +89,22 @@ final class BatteryMonitor: ObservableObject {
             ) == KERN_SUCCESS,
                let dict = props?.takeRetainedValue() as? [String: Any]
             {
-                cycleCount     = firstPositiveIntValue(in: dict, forKeys: ["CycleCount"]) ?? 0
-                designCapacity = firstPositiveIntValue(in: dict, forKeys: ["DesignCapacity"]) ?? 0
-                maxCapacity    = resolvedMaxCapacity(in: dict, designCapacity: designCapacity)
+                cycleCount     = firstPositiveIntValueForKeys(in: dict, keys: ["CycleCount"]) ?? 0
+                designCapacity = firstPositiveIntValueForKeys(in: dict, keys: ["DesignCapacity"]) ?? 0
+                maxCapacity    = resolveMaxCapacity(in: dict, designCapacity: designCapacity)
 
                 // Temperature is stored in centidegrees Celsius (e.g. 3800 → 38.00 °C)
-                let tempRaw = firstPositiveIntValue(in: dict, forKeys: ["Temperature"]) ?? 0
+                let tempRaw = firstPositiveIntValueForKeys(in: dict, keys: ["Temperature"]) ?? 0
                 temperature = Double(tempRaw) / 100.0
 
-                healthPercent = resolvedHealthPercent(
+                healthPercent = resolveHealthPercent(
                     in: dict,
                     designCapacity: designCapacity,
                     maxCapacity: maxCapacity
                 )
 
                 if let adapterDict = dict["AdapterDetails"] as? [String: Any],
-                   let watts = firstPositiveIntValue(in: adapterDict, forKeys: ["Watts"])
+                   let watts = firstPositiveIntValueForKeys(in: adapterDict, keys: ["Watts"])
                 {
                     adapterWattage = watts
                 }
@@ -188,7 +188,7 @@ final class BatteryMonitor: ObservableObject {
         return maxCycles[modelString] ?? 1000
     }
 
-    private static func firstPositiveIntValue(in dict: [String: Any], forKeys keys: [String]) -> Int? {
+    private static func firstPositiveIntValueForKeys(in dict: [String: Any], keys: [String]) -> Int? {
         for key in keys {
             if let value = dict[key] as? Int, value > 0 {
                 return value
@@ -202,10 +202,10 @@ final class BatteryMonitor: ObservableObject {
         return nil
     }
 
-    private static func resolvedMaxCapacity(in dict: [String: Any], designCapacity: Int) -> Int {
-        let reportedMaxCapacity = firstPositiveIntValue(in: dict, forKeys: ["MaxCapacity"])
-        let rawMaxCapacity = firstPositiveIntValue(in: dict, forKeys: ["AppleRawMaxCapacity"])
-        let nominalChargeCapacity = firstPositiveIntValue(in: dict, forKeys: ["NominalChargeCapacity"])
+    private static func resolveMaxCapacity(in dict: [String: Any], designCapacity: Int) -> Int {
+        let reportedMaxCapacity = firstPositiveIntValueForKeys(in: dict, keys: ["MaxCapacity"])
+        let rawMaxCapacity = firstPositiveIntValueForKeys(in: dict, keys: ["AppleRawMaxCapacity"])
+        let nominalChargeCapacity = firstPositiveIntValueForKeys(in: dict, keys: ["NominalChargeCapacity"])
 
         let candidates = [rawMaxCapacity, reportedMaxCapacity, nominalChargeCapacity]
             .compactMap { $0 }
@@ -223,23 +223,23 @@ final class BatteryMonitor: ObservableObject {
         }
 
         let fallbackPercent =
-            firstPositiveIntValue(in: dict, forKeys: ["MaximumCapacityPercent"]) ??
+            firstPositiveIntValueForKeys(in: dict, keys: ["MaximumCapacityPercent"]) ??
             reportedMaxCapacity.flatMap { isPercentageValue($0) ? $0 : nil }
 
         guard designCapacity > 0, let fallbackPercent, fallbackPercent > 0 else { return 0 }
         return Int((Double(designCapacity) * Double(fallbackPercent) / 100.0).rounded())
     }
 
-    private static func resolvedHealthPercent(
+    private static func resolveHealthPercent(
         in dict: [String: Any],
         designCapacity: Int,
         maxCapacity: Int
     ) -> Int {
-        if let healthPercent = firstPositiveIntValue(in: dict, forKeys: ["MaximumCapacityPercent"]) {
+        if let healthPercent = firstPositiveIntValueForKeys(in: dict, keys: ["MaximumCapacityPercent"]) {
             return min(100, healthPercent)
         }
 
-        if let reportedMaxCapacity = firstPositiveIntValue(in: dict, forKeys: ["MaxCapacity"]),
+        if let reportedMaxCapacity = firstPositiveIntValueForKeys(in: dict, keys: ["MaxCapacity"]),
            isPercentageValue(reportedMaxCapacity)
         {
             return reportedMaxCapacity
