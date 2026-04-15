@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 /// Reads battery information from IOKit.
