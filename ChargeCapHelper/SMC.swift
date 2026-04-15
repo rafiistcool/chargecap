@@ -115,16 +115,31 @@ enum SMCKit {
     static func open() throws {
         if connection != 0 { return }
 
-        NSLog("[SMC] open: trying AppleSMCKeysEndpoint")
+        let log: (String) -> Void = { msg in
+            let entry = "\(Date()): \(msg)\n"
+            if let data = entry.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: "/tmp/chargecap-smc.log") {
+                    if let fh = FileHandle(forWritingAtPath: "/tmp/chargecap-smc.log") {
+                        fh.seekToEndOfFile()
+                        fh.write(data)
+                        fh.closeFile()
+                    }
+                } else {
+                    FileManager.default.createFile(atPath: "/tmp/chargecap-smc.log", contents: data)
+                }
+            }
+        }
+
+        log("Trying AppleSMCKeysEndpoint")
         var service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMCKeysEndpoint"))
-        NSLog("[SMC] open: AppleSMCKeysEndpoint result = %d", service)
+        log("AppleSMCKeysEndpoint result: \(service)")
         if service == 0 {
-            NSLog("[SMC] open: trying AppleSMC")
+            log("Trying AppleSMC")
             service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
-            NSLog("[SMC] open: AppleSMC result = %d", service)
+            log("AppleSMC result: \(service)")
         }
         if service == 0 {
-            NSLog("[SMC] open: no driver found!")
+            log("ERROR: no driver found")
             throw SMCError.driverNotFound
         }
 
@@ -132,10 +147,10 @@ enum SMCKit {
         IOObjectRelease(service)
 
         if result != kIOReturnSuccess {
-            NSLog("[SMC] open: IOServiceOpen failed with 0x%x", result)
+            log("ERROR: IOServiceOpen failed with 0x\(String(result, radix: 16))")
             throw SMCError.failedToOpen
         }
-        NSLog("[SMC] open: success, connection=%d", connection)
+        log("Success, connection=\(connection)")
     }
 
     @discardableResult
