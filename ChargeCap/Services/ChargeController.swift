@@ -40,9 +40,9 @@ final class ChargeController: ObservableObject {
         }
     }
 
-    func installHelper() async {
+    func installHelper(force: Bool = false) async {
         do {
-            try await helperManager.installIfNeeded()
+            try await helperManager.installIfNeeded(force: force)
             state.lastErrorDescription = nil
             evaluate(using: monitor.batteryState)
         } catch {

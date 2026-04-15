@@ -299,7 +299,7 @@ struct SettingsView: View {
 
             Button(helperManager.isInstalled ? "Reinstall Helper" : "Install Helper") {
                 Task {
-                    await controller.installHelper()
+                    await controller.installHelper(force: helperManager.isInstalled)
                 }
             }
         } header: {

@@ -38,14 +38,16 @@ final class PrivilegedHelperManager: ObservableObject {
         }
     }
 
-    func installIfNeeded() async throws {
-        do {
-            _ = try await getVersion()
-            isInstalled = true
-            lastErrorDescription = nil
-            return
-        } catch {
-            isInstalled = false
+    func installIfNeeded(force: Bool = false) async throws {
+        if !force {
+            do {
+                _ = try await getVersion()
+                isInstalled = true
+                lastErrorDescription = nil
+                return
+            } catch {
+                isInstalled = false
+            }
         }
 
         do {
