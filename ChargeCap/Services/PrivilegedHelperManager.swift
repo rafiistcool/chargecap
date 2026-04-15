@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import ServiceManagement
 import Security
@@ -68,7 +69,9 @@ final class PrivilegedHelperManager: ObservableObject {
         }
 
         // Bring the app back to front after the auth dialog dismisses.
-        NSApp.activate()
+        DispatchQueue.main.async {
+            NSApplication.shared.activate()
+        }
 
         // Old connection is stale after blessing; force a fresh one.
         invalidateConnection()
