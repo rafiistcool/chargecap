@@ -1,5 +1,8 @@
 import Foundation
 import IOKit
+import os.log
+
+private let smcLog = Logger(subsystem: "com.chargecap.Helper", category: "SMC")
 
 typealias SMCBytes = (
     UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
@@ -115,20 +118,26 @@ enum SMCKit {
     static func open() throws {
         if connection != 0 { return }
 
+        smcLog.info("SMC open: trying AppleSMCKeysEndpoint")
         var service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMCKeysEndpoint"))
         if service == 0 {
+            smcLog.info("SMC open: AppleSMCKeysEndpoint not found, trying AppleSMC")
             service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
         }
         if service == 0 {
+            smcLog.error("SMC open: no driver found")
             throw SMCError.driverNotFound
         }
 
+        smcLog.info("SMC open: found service \(service), opening...")
         let result = IOServiceOpen(service, mach_task_self_, 0, &connection)
         IOObjectRelease(service)
 
         if result != kIOReturnSuccess {
+            smcLog.error("SMC open: IOServiceOpen failed with \(result)")
             throw SMCError.failedToOpen
         }
+        smcLog.info("SMC open: success, connection=\(connection)")
     }
 
     @discardableResult

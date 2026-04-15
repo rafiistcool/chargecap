@@ -147,6 +147,8 @@ final class PrivilegedHelperManager: ObservableObject {
 
     private func registerDaemon() throws {
         let service = SMAppService.daemon(plistName: "com.chargecap.Helper.plist")
+        // Unregister first to ensure launchd picks up the new binary.
+        try? service.unregister()
         try service.register()
     }
 
