@@ -87,20 +87,22 @@ final class BatteryMonitor: ObservableObject {
             ) == KERN_SUCCESS,
                let dict = props?.takeRetainedValue() as? [String: Any]
             {
-                cycleCount     = dict["CycleCount"]     as? Int ?? 0
-                designCapacity = dict["DesignCapacity"] as? Int ?? 0
-                maxCapacity    = dict["MaxCapacity"]    as? Int ?? 0
+                cycleCount     = intValue(in: dict, forKeys: ["CycleCount"]) ?? 0
+                designCapacity = intValue(in: dict, forKeys: ["DesignCapacity"]) ?? 0
+                maxCapacity    = resolvedMaxCapacity(in: dict, designCapacity: designCapacity)
 
                 // Temperature is stored in centidegrees Celsius (e.g. 3800 → 38.00 °C)
-                let tempRaw = dict["Temperature"] as? Int ?? 0
+                let tempRaw = intValue(in: dict, forKeys: ["Temperature"]) ?? 0
                 temperature = Double(tempRaw) / 100.0
 
-                if designCapacity > 0 {
-                    healthPercent = min(100, Int((Double(maxCapacity) / Double(designCapacity)) * 100))
-                }
+                healthPercent = resolvedHealthPercent(
+                    in: dict,
+                    designCapacity: designCapacity,
+                    maxCapacity: maxCapacity
+                )
 
                 if let adapterDict = dict["AdapterDetails"] as? [String: Any],
-                   let watts = adapterDict["Watts"] as? Int
+                   let watts = intValue(in: adapterDict, forKeys: ["Watts"])
                 {
                     adapterWattage = watts
                 }
@@ -182,5 +184,57 @@ final class BatteryMonitor: ObservableObject {
         let modelString = String(cString: model)
 
         return maxCycles[modelString] ?? 1000
+    }
+
+    private static func intValue(in dict: [String: Any], forKeys keys: [String]) -> Int? {
+        for key in keys {
+            if let value = dict[key] as? Int, value > 0 {
+                return value
+            }
+
+            if let value = dict[key] as? NSNumber, value.intValue > 0 {
+                return value.intValue
+            }
+        }
+
+        return nil
+    }
+
+    private static func resolvedMaxCapacity(in dict: [String: Any], designCapacity: Int) -> Int {
+        let maxCapacity = intValue(in: dict, forKeys: ["MaxCapacity"])
+        let rawMaxCapacity = intValue(in: dict, forKeys: ["AppleRawMaxCapacity"])
+        let nominalChargeCapacity = intValue(in: dict, forKeys: ["NominalChargeCapacity"])
+
+        let candidates = [rawMaxCapacity, maxCapacity, nominalChargeCapacity]
+            .compactMap { $0 }
+            .filter { candidate in
+                candidate > 100 && (designCapacity == 0 || candidate <= designCapacity * 2)
+            }
+
+        if let bestCandidate = candidates.first {
+            return bestCandidate
+        }
+
+        let healthPercent = resolvedHealthPercent(
+            in: dict,
+            designCapacity: designCapacity,
+            maxCapacity: maxCapacity ?? 0
+        )
+
+        guard designCapacity > 0, healthPercent > 0 else { return 0 }
+        return Int((Double(designCapacity) * Double(healthPercent) / 100.0).rounded())
+    }
+
+    private static func resolvedHealthPercent(
+        in dict: [String: Any],
+        designCapacity: Int,
+        maxCapacity: Int
+    ) -> Int {
+        if let healthPercent = intValue(in: dict, forKeys: ["MaximumCapacityPercent"]) {
+            return min(100, healthPercent)
+        }
+
+        guard designCapacity > 0, maxCapacity > 0 else { return 100 }
+        return min(100, Int((Double(maxCapacity) / Double(designCapacity) * 100.0).rounded()))
     }
 }
