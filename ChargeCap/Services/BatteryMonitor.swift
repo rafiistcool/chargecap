@@ -201,11 +201,11 @@ final class BatteryMonitor: ObservableObject {
     }
 
     private static func resolvedMaxCapacity(in dict: [String: Any], designCapacity: Int) -> Int {
-        let maxCapacity = intValue(in: dict, forKeys: ["MaxCapacity"])
+        let reportedMaxCapacity = intValue(in: dict, forKeys: ["MaxCapacity"])
         let rawMaxCapacity = intValue(in: dict, forKeys: ["AppleRawMaxCapacity"])
         let nominalChargeCapacity = intValue(in: dict, forKeys: ["NominalChargeCapacity"])
 
-        let candidates = [rawMaxCapacity, maxCapacity, nominalChargeCapacity]
+        let candidates = [rawMaxCapacity, reportedMaxCapacity, nominalChargeCapacity]
             .compactMap { $0 }
             .filter { candidate in
                 candidate > 100 && (designCapacity == 0 || candidate <= designCapacity * 2)
@@ -215,14 +215,12 @@ final class BatteryMonitor: ObservableObject {
             return bestCandidate
         }
 
-        let healthPercent = resolvedHealthPercent(
-            in: dict,
-            designCapacity: designCapacity,
-            maxCapacity: maxCapacity ?? 0
-        )
+        let fallbackPercent =
+            intValue(in: dict, forKeys: ["MaximumCapacityPercent"]) ??
+            reportedMaxCapacity.flatMap { (1...100).contains($0) ? $0 : nil }
 
-        guard designCapacity > 0, healthPercent > 0 else { return 0 }
-        return Int((Double(designCapacity) * Double(healthPercent) / 100.0).rounded())
+        guard designCapacity > 0, let fallbackPercent, fallbackPercent > 0 else { return 0 }
+        return Int((Double(designCapacity) * Double(fallbackPercent) / 100.0).rounded())
     }
 
     private static func resolvedHealthPercent(
@@ -232,6 +230,12 @@ final class BatteryMonitor: ObservableObject {
     ) -> Int {
         if let healthPercent = intValue(in: dict, forKeys: ["MaximumCapacityPercent"]) {
             return min(100, healthPercent)
+        }
+
+        if let reportedMaxCapacity = intValue(in: dict, forKeys: ["MaxCapacity"]),
+           (1...100).contains(reportedMaxCapacity)
+        {
+            return reportedMaxCapacity
         }
 
         guard designCapacity > 0, maxCapacity > 0 else { return 100 }
