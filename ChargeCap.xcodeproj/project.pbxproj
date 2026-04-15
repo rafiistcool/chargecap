@@ -25,6 +25,7 @@
 		CC0000000000000000000102 /* ChargeCapHelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000113 /* ChargeCapHelperProtocol.swift */; };
 		CC0000000000000000000103 /* ChargeCapHelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000113 /* ChargeCapHelperProtocol.swift */; };
 		CC0000000000000000000104 /* ChargeCapHelper in CopyFiles */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000112 /* ChargeCapHelper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		CC0000000000000000000300 /* Helper-Launchd.plist in CopyFiles */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000118 /* Helper-Launchd.plist */; };
 		CC0000000000000000000105 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000114 /* main.swift */; };
 		CC0000000000000000000106 /* HelperTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000115 /* HelperTool.swift */; };
 		CC0000000000000000000107 /* SMC.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000116 /* SMC.swift */; };
@@ -39,6 +40,16 @@
 			dstSubfolderSpec = 1;
 			files = (
 				CC0000000000000000000104 /* ChargeCapHelper in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CC0000000000000000000301 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Library/LaunchDaemons;
+			dstSubfolderSpec = 1;
+			files = (
+				CC0000000000000000000300 /* Helper-Launchd.plist in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -198,6 +209,7 @@
 				CC0000000000000000000120 /* Frameworks */,
 				CC0000000000000000000122 /* Resources */,
 				CC000000000000000000004A /* CopyFiles */,
+				CC0000000000000000000301 /* CopyFiles */,
 			);
 			buildRules = (
 			);
@@ -273,6 +285,29 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		CC0000000000000000000200 /* Preprocess Helper-Info.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/ChargeCapHelper/Helper-Info.plist",
+			);
+			name = "Preprocess Helper-Info.plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Helper-Info.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "sed \"s/\\$(DEVELOPMENT_TEAM)/${DEVELOPMENT_TEAM}/g\" \"${SRCROOT}/ChargeCapHelper/Helper-Info.plist\" > \"${DERIVED_FILE_DIR}/Helper-Info.plist\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		CC000000000000000000004E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -305,29 +340,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		CC0000000000000000000200 /* Preprocess Helper-Info.plist */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/ChargeCapHelper/Helper-Info.plist",
-			);
-			name = "Preprocess Helper-Info.plist";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Helper-Info.plist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "sed \"s/\\$(DEVELOPMENT_TEAM)/${DEVELOPMENT_TEAM}/g\" \"${SRCROOT}/ChargeCapHelper/Helper-Info.plist\" > \"${DERIVED_FILE_DIR}/Helper-Info.plist\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
 		CC00000000000000000000A0 /* Debug */ = {
@@ -466,7 +478,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = XGCYZ8NBU4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ChargeCap/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -492,7 +504,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = XGCYZ8NBU4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ChargeCap/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

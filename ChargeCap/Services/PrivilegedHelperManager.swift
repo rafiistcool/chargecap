@@ -125,7 +125,7 @@ final class PrivilegedHelperManager: ObservableObject {
 
     private func blessHelper() throws {
         let service = SMAppService.daemon(
-            plistName: "\(ChargeCapHelperConfiguration.helperIdentifier).plist"
+            plistName: "Helper-Launchd.plist"
         )
         try service.register()
     }
