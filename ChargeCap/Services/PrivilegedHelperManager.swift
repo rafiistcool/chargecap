@@ -8,6 +8,9 @@ final class PrivilegedHelperManager: ObservableObject {
 
     private var _connection: NSXPCConnection?
 
+    /// Override point for unit tests – set a mock proxy to bypass real XPC.
+    var _proxyOverride: ChargeCapHelperProtocol?
+
     private var connection: NSXPCConnection {
         if let existing = _connection { return existing }
 
@@ -165,12 +168,14 @@ final class PrivilegedHelperManager: ObservableObject {
         }
     }
 
-    private func invalidateConnection() {
+    func invalidateConnection() {
         _connection?.invalidate()
         _connection = nil
     }
 
     private var helperProxy: ChargeCapHelperProtocol? {
+        if let _proxyOverride { return _proxyOverride }
+
         let conn = connection
         var proxyError: Error?
         let proxy = conn.remoteObjectProxyWithErrorHandler { error in
@@ -197,7 +202,7 @@ final class PrivilegedHelperManager: ObservableObject {
     private static let xpcTimeout: TimeInterval = 5
 
     /// Wraps a continuation to guarantee exactly one resume, preventing leaks.
-    private final class SafeContinuation<T: Sendable>: @unchecked Sendable {
+    final class SafeContinuation<T: Sendable>: @unchecked Sendable {
         private var continuation: CheckedContinuation<T, Error>?
         private let lock = NSLock()
 
@@ -244,7 +249,7 @@ final class PrivilegedHelperManager: ObservableObject {
         }
     }
 
-    private func writeSMCByte(key: String, value: UInt8) async throws {
+    func writeSMCByte(key: String, value: UInt8) async throws {
         guard let helper = helperProxy else {
             throw HelperError.connectionUnavailable
         }
@@ -358,3 +363,7 @@ final class PrivilegedHelperManager: ObservableObject {
         }
     }
 }
+
+// MARK: - SMCReadable Conformance
+
+extension PrivilegedHelperManager: SMCReadable {}

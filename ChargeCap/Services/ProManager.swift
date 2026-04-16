@@ -1,18 +1,49 @@
 import Foundation
 import StoreKit
 
+// MARK: - Store Service Protocol
+
+/// Outcome of a purchase attempt, independent of StoreKit types.
+enum ProPurchaseOutcome: Equatable {
+    case verified
+    case verificationFailed
+    case pending
+    case userCancelled
+    case unknown
+}
+
+/// Abstracts App Store operations so ProManager can be tested without live StoreKit.
+@MainActor
+protocol ProStoreService: AnyObject {
+    /// Fetch the display price for a product.  Returns `nil` when the product is unavailable.
+    func fetchDisplayPrice(for id: String) async throws -> String?
+
+    /// Attempt to purchase the previously-fetched product.
+    func purchaseProduct(id: String) async throws -> ProPurchaseOutcome
+
+    /// Whether the user holds a verified entitlement for the given product.
+    func hasVerifiedEntitlement(for productID: String) async -> Bool
+
+    /// Synchronise receipts with the App Store.
+    func sync() async throws
+}
+
+// MARK: - ProManager
+
 @MainActor
 final class ProManager: ObservableObject {
-    @Published private(set) var product: Product?
+    @Published private(set) var productDisplayPrice: String?
     @Published private(set) var hasUnlockedPro: Bool
     @Published private(set) var isLoading = false
     @Published private(set) var purchaseState: PurchaseState = .idle
 
     private let overrideDefaultsKey = "proOverrideEnabled"
     private let defaults: UserDefaults
+    private let store: ProStoreService
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, store: ProStoreService? = nil) {
         self.defaults = defaults
+        self.store = store ?? LiveProStoreService()
         #if DEBUG
         self.hasUnlockedPro = defaults.bool(forKey: overrideDefaultsKey)
         #else
@@ -35,7 +66,7 @@ final class ProManager: ObservableObject {
 
     func refreshProducts() async {
         do {
-            product = try await Product.products(for: [Constants.Pro.productID]).first
+            productDisplayPrice = try await store.fetchDisplayPrice(for: Constants.Pro.productID)
         } catch {
             purchaseState = .failed(error.localizedDescription)
         }
@@ -48,35 +79,31 @@ final class ProManager: ObservableObject {
         var isUnlocked = false
         #endif
 
-        for await result in Transaction.currentEntitlements {
-            guard case .verified(let transaction) = result else { continue }
-            if transaction.productID == Constants.Pro.productID {
-                isUnlocked = true
-                break
-            }
+        if await store.hasVerifiedEntitlement(for: Constants.Pro.productID) {
+            isUnlocked = true
         }
 
         hasUnlockedPro = isUnlocked
     }
 
     func purchasePro() async {
-        guard let product else {
+        guard productDisplayPrice != nil else {
             await refreshProducts()
-            guard let product else {
+            guard productDisplayPrice != nil else {
                 purchaseState = .failed("Product unavailable")
                 return
             }
 
-            await purchase(product)
+            await performPurchase()
             return
         }
 
-        await purchase(product)
+        await performPurchase()
     }
 
     func restorePurchases() async {
         do {
-            try await AppStore.sync()
+            try await store.sync()
             await refreshEntitlements()
             purchaseState = hasUnlockedPro ? .purchased : .idle
         } catch {
@@ -91,32 +118,31 @@ final class ProManager: ObservableObject {
     }
     #endif
 
-    private func purchase(_ product: Product) async {
+    private func performPurchase() async {
         isLoading = true
         defer { isLoading = false }
 
         do {
-            let result = try await product.purchase()
-
-            switch result {
-            case .success(let verificationResult):
-                guard case .verified(let transaction) = verificationResult else {
-                    purchaseState = .failed("Purchase verification failed")
-                    return
-                }
-
-                await transaction.finish()
-                hasUnlockedPro = true
-                purchaseState = .purchased
-            case .pending:
-                purchaseState = .pending
-            case .userCancelled:
-                purchaseState = .cancelled
-            @unknown default:
-                purchaseState = .failed("Unknown purchase result")
-            }
+            let outcome = try await store.purchaseProduct(id: Constants.Pro.productID)
+            applyPurchaseOutcome(outcome)
         } catch {
             purchaseState = .failed(error.localizedDescription)
+        }
+    }
+
+    func applyPurchaseOutcome(_ outcome: ProPurchaseOutcome) {
+        switch outcome {
+        case .verified:
+            hasUnlockedPro = true
+            purchaseState = .purchased
+        case .verificationFailed:
+            purchaseState = .failed("Purchase verification failed")
+        case .pending:
+            purchaseState = .pending
+        case .userCancelled:
+            purchaseState = .cancelled
+        case .unknown:
+            purchaseState = .failed("Unknown purchase result")
         }
     }
 }

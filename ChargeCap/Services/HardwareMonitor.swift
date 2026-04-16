@@ -4,7 +4,7 @@ import Foundation
 
 // MARK: - Safe Float → Int conversion
 
-private extension Float {
+extension Float {
     /// Converts to `Int`, returning `fallback` if the value is NaN, infinite,
     /// or outside the representable range. Prevents fatal traps on garbage SMC data.
     func safeInt(clampedTo range: ClosedRange<Int> = 0...100_000, fallback: Int = 0) -> Int {
@@ -14,9 +14,22 @@ private extension Float {
     }
 }
 
+// MARK: - SMC Reader Protocol
+
+/// Protocol for reading SMC sensor data, enabling dependency injection and testability.
+@MainActor
+protocol SMCReadable: AnyObject, Sendable {
+    var isInstalled: Bool { get }
+    func readSMCFloatValue(key: String) async throws -> Float
+    func readSMCByteValue(key: String) async throws -> UInt8
+    func readSMCTemperatureValue(key: String) async throws -> Double
+}
+
 /// Reads CPU usage, memory usage, and SMC sensor data (temperatures, fans) on a timer.
 @MainActor
 final class HardwareMonitor: ObservableObject {
+    typealias CPUTicks = (user: UInt64, system: UInt64, idle: UInt64, nice: UInt64)
+
     // MARK: - Published State
 
     @Published private(set) var cpuUsage: Double = 0.0
@@ -28,16 +41,16 @@ final class HardwareMonitor: ObservableObject {
 
     // MARK: - Dependencies
 
-    private let helperManager: PrivilegedHelperManager
+    private let helperManager: any SMCReadable
 
     // MARK: - Internal State
 
     private var timer: AnyCancellable?
-    private var previousCPUTicks: (user: UInt64, system: UInt64, idle: UInt64, nice: UInt64)?
+    private var previousCPUTicks: CPUTicks?
     private static let refreshInterval: TimeInterval = 3
 
     // SMC sensor keys to query for temperatures
-    private static let temperatureKeys: [(key: String, name: String)] = [
+    static let temperatureKeys: [(key: String, name: String)] = [
         ("TC0C", "CPU Die"),
         ("TC0P", "CPU Proximity"),
         ("GC0C", "GPU"),
@@ -47,9 +60,11 @@ final class HardwareMonitor: ObservableObject {
         ("TN0D", "NVMe/SSD"),
     ]
 
-    init(helperManager: PrivilegedHelperManager) {
+    init(helperManager: any SMCReadable, startMonitoring: Bool = true) {
         self.helperManager = helperManager
-        startTimer()
+        if startMonitoring {
+            startTimer()
+        }
     }
 
     deinit {
@@ -71,7 +86,7 @@ final class HardwareMonitor: ObservableObject {
 
     // MARK: - Refresh
 
-    private func refresh() async {
+    func refresh() async {
         // CPU usage and memory can be read in-process (no root needed)
         let cpuResult = readCPUUsage()
         let memoryResult = Self.readMemoryUsage()
@@ -104,7 +119,7 @@ final class HardwareMonitor: ObservableObject {
 
     // MARK: - CPU Usage (Mach Kernel API)
 
-    private func readCPUUsage() -> Double {
+    func readCPUUsage() -> Double {
         var numCPUs: natural_t = 0
         var cpuInfo: processor_info_array_t?
         var numCPUInfo: mach_msg_type_number_t = 0
@@ -138,19 +153,19 @@ final class HardwareMonitor: ObservableObject {
         }
 
         let currentTicks = (user: totalUser, system: totalSystem, idle: totalIdle, nice: totalNice)
-
-        guard let previous = previousCPUTicks else {
-            previousCPUTicks = currentTicks
-            return 0
-        }
-
-        let deltaUser = currentTicks.user - previous.user
-        let deltaSystem = currentTicks.system - previous.system
-        let deltaIdle = currentTicks.idle - previous.idle
-        let deltaNice = currentTicks.nice - previous.nice
-        let totalDelta = deltaUser + deltaSystem + deltaIdle + deltaNice
-
+        let usage = Self.calculateCPUUsage(previous: previousCPUTicks, current: currentTicks)
         previousCPUTicks = currentTicks
+        return usage
+    }
+
+    static func calculateCPUUsage(previous: CPUTicks?, current: CPUTicks) -> Double {
+        guard let previous else { return 0 }
+
+        let deltaUser = current.user - previous.user
+        let deltaSystem = current.system - previous.system
+        let deltaIdle = current.idle - previous.idle
+        let deltaNice = current.nice - previous.nice
+        let totalDelta = deltaUser + deltaSystem + deltaIdle + deltaNice
 
         guard totalDelta > 0 else { return 0 }
 
@@ -160,7 +175,7 @@ final class HardwareMonitor: ObservableObject {
 
     // MARK: - Memory Usage (Mach Kernel API)
 
-    private static func readMemoryUsage() -> MemoryUsage {
+    static func readMemoryUsage() -> MemoryUsage {
         let totalRAM = ProcessInfo.processInfo.physicalMemory
 
         var vmStats = vm_statistics64()
@@ -214,7 +229,7 @@ final class HardwareMonitor: ObservableObject {
 
     // MARK: - SMC Temperature Sensors
 
-    private func readTemperatures() async -> [SensorReading] {
+    func readTemperatures() async -> [SensorReading] {
         var readings: [SensorReading] = []
 
         await withTaskGroup(of: SensorReading?.self) { group in
@@ -252,7 +267,7 @@ final class HardwareMonitor: ObservableObject {
 
     // MARK: - Fan Monitoring
 
-    private func readFans() async -> [FanInfo] {
+    func readFans() async -> [FanInfo] {
         // First, get number of fans
         let fanCount: Int
         do {
@@ -275,12 +290,14 @@ final class HardwareMonitor: ObservableObject {
                 let rpm = try await helperManager.readSMCFloatValue(key: actualKey)
                 let minRPM = (try? await helperManager.readSMCFloatValue(key: minKey)) ?? 0
                 let maxRPM = (try? await helperManager.readSMCFloatValue(key: maxKey)) ?? 0
+                let minRPMValue = minRPM.safeInt()
+                let maxRPMValue = maxRPM.safeInt()
 
                 let fan = FanInfo(
                     index: i,
-                    rpm: rpm.safeInt(),
-                    minRPM: minRPM.safeInt(),
-                    maxRPM: maxRPM.safeInt()
+                    rpm: Self.clampedFanRPM(actual: rpm, minRPM: minRPM, maxRPM: maxRPM),
+                    minRPM: minRPMValue,
+                    maxRPM: maxRPMValue
                 )
                 fans.append(fan)
             } catch {
@@ -290,5 +307,16 @@ final class HardwareMonitor: ObservableObject {
         }
 
         return fans
+    }
+
+    static func clampedFanRPM(actual: Float, minRPM: Float, maxRPM: Float) -> Int {
+        let actualValue = actual.safeInt()
+        guard actual.isFinite else { return actualValue }
+
+        let minValue = minRPM.safeInt()
+        let maxValue = maxRPM.safeInt()
+        guard maxValue > 0, maxValue >= minValue else { return actualValue }
+
+        return min(max(actualValue, minValue), maxValue)
     }
 }
