@@ -6,6 +6,25 @@ enum ChargeCommand: String, Equatable {
     case pause
 }
 
+enum FanControlMode: String, Codable, CaseIterable {
+    case auto = "Auto"
+    case performance = "Performance"
+    case quiet = "Quiet"
+
+    init?(fromStoredString storedString: String) {
+        switch storedString {
+        case FanControlMode.auto.rawValue:
+            self = .auto
+        case FanControlMode.performance.rawValue, "Manual":
+            self = .performance
+        case FanControlMode.quiet.rawValue:
+            self = .quiet
+        default:
+            return nil
+        }
+    }
+}
+
 enum ChargeLimitStatus: Equatable {
     case disabled
     case unavailable(String)
@@ -103,6 +122,8 @@ struct ChargeControlState: Equatable {
     var warmTemperatureThreshold: Int
     var hotTemperatureThreshold: Int
     var isEnabled: Bool
+    var isSailingModeEnabled: Bool
+    var isHeatProtectionEnabled: Bool
     var command: ChargeCommand
     var status: ChargeLimitStatus
     var lastTransitionDate: Date?
@@ -115,6 +136,8 @@ struct ChargeControlState: Equatable {
         warmTemperatureThreshold: Constants.defaultWarmTemperatureThreshold,
         hotTemperatureThreshold: Constants.defaultHotTemperatureThreshold,
         isEnabled: false,
+        isSailingModeEnabled: true,
+        isHeatProtectionEnabled: false,
         command: .normal,
         status: .disabled,
         lastTransitionDate: nil,
@@ -123,7 +146,8 @@ struct ChargeControlState: Equatable {
     )
 
     var resumeThreshold: Int {
-        max(Constants.minChargeLimit, targetLimit - sailingRange)
+        guard isSailingModeEnabled else { return targetLimit }
+        return max(Constants.minChargeLimit, targetLimit - sailingRange)
     }
 
     var isLimiting: Bool {

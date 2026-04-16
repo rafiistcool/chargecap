@@ -34,8 +34,14 @@ enum Constants {
     /// Fallback schedule estimate when macOS cannot provide time-to-full.
     static let scheduleFallbackMinutesPerPercent = 3
 
-    /// Interval in seconds between battery state refreshes.
-    static let refreshInterval: TimeInterval = 15
+    /// Minimum interval in seconds between battery state refreshes.
+    static let minRefreshInterval: TimeInterval = 1
+
+    /// Maximum interval in seconds between battery state refreshes.
+    static let maxRefreshInterval: TimeInterval = 60
+
+    /// Default interval in seconds between battery state refreshes.
+    static let defaultRefreshInterval: TimeInterval = 15
 
     enum Pro {
         static let price = "$4.99"

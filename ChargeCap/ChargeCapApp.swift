@@ -61,7 +61,7 @@ struct ChargeCapApp: App {
             HStack(spacing: 2) {
                 let state = batteryMonitor.batteryState
                 Image(systemName: menuBarIconName)
-                if state.hasBattery {
+                if state.hasBattery && appSettings.showPercentInMenuBar {
                     Text("\(state.chargePercent)%")
                         .monospacedDigit()
                 }
@@ -69,14 +69,19 @@ struct ChargeCapApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Settings {
+        Window("ChargeCap Settings", id: "settings") {
             SettingsView()
                 .environmentObject(batteryMonitor)
                 .environmentObject(appSettings)
                 .environmentObject(helperManager)
                 .environmentObject(proManager)
                 .environmentObject(chargeController)
+                .onAppear {
+                    NSApp.activate(ignoringOtherApps: true)
+                }
         }
+        .windowResizability(.contentSize)
+        .defaultLaunchBehavior(.suppressed)
     }
 
     private var menuBarIconName: String {

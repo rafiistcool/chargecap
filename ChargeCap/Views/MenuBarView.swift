@@ -5,6 +5,7 @@ struct MenuBarView: View {
     @EnvironmentObject private var monitor: BatteryMonitor
     @EnvironmentObject private var controller: ChargeController
     @EnvironmentObject private var proManager: ProManager
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let state = monitor.batteryState
@@ -186,10 +187,14 @@ struct MenuBarView: View {
 
     private var settingsRow: some View {
         HStack(spacing: 12) {
-            SettingsLink {
+            Button {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "settings")
+            } label: {
                 Label("Settings", systemImage: "gear")
             }
             .buttonStyle(.borderless)
+            .keyboardShortcut(",", modifiers: .command)
 
             Spacer()
 

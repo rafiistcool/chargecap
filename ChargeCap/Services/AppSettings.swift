@@ -71,6 +71,50 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    @Published var isSailingModeEnabled: Bool {
+        didSet { defaults.set(isSailingModeEnabled, forKey: Keys.isSailingModeEnabled) }
+    }
+
+    @Published var isHeatProtectionEnabled: Bool {
+        didSet { defaults.set(isHeatProtectionEnabled, forKey: Keys.isHeatProtectionEnabled) }
+    }
+
+    @Published var fanControlMode: FanControlMode {
+        didSet { defaults.set(fanControlMode.rawValue, forKey: Keys.fanControlMode) }
+    }
+
+    @Published var isManualFanCurveEnabled: Bool {
+        didSet { defaults.set(isManualFanCurveEnabled, forKey: Keys.isManualFanCurveEnabled) }
+    }
+
+    @Published var notifyAtChargeLimit: Bool {
+        didSet { defaults.set(notifyAtChargeLimit, forKey: Keys.notifyAtChargeLimit) }
+    }
+
+    @Published var notifyOnHealthDrop: Bool {
+        didSet { defaults.set(notifyOnHealthDrop, forKey: Keys.notifyOnHealthDrop) }
+    }
+
+    @Published var notifyOnTemperatureAlert: Bool {
+        didSet { defaults.set(notifyOnTemperatureAlert, forKey: Keys.notifyOnTemperatureAlert) }
+    }
+
+    @Published var showPercentInMenuBar: Bool {
+        didSet { defaults.set(showPercentInMenuBar, forKey: Keys.showPercentInMenuBar) }
+    }
+
+    @Published var refreshIntervalSeconds: Int {
+        didSet {
+            let clamped = Self.clampRefreshInterval(refreshIntervalSeconds)
+            if refreshIntervalSeconds != clamped {
+                refreshIntervalSeconds = clamped
+                return
+            }
+
+            defaults.set(refreshIntervalSeconds, forKey: Keys.refreshIntervalSeconds)
+        }
+    }
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -98,6 +142,27 @@ final class AppSettings: ObservableObject {
         } else {
             chargeSchedule = .default
         }
+
+        isSailingModeEnabled = defaults.object(forKey: Keys.isSailingModeEnabled) as? Bool ?? true
+        isHeatProtectionEnabled = defaults.object(forKey: Keys.isHeatProtectionEnabled) as? Bool ?? false
+
+        if let modeRaw = defaults.string(forKey: Keys.fanControlMode),
+           let mode = FanControlMode(fromStoredString: modeRaw)
+        {
+            fanControlMode = mode
+        } else {
+            fanControlMode = .auto
+        }
+        isManualFanCurveEnabled = defaults.object(forKey: Keys.isManualFanCurveEnabled) as? Bool ?? false
+
+        notifyAtChargeLimit = defaults.object(forKey: Keys.notifyAtChargeLimit) as? Bool ?? true
+        notifyOnHealthDrop = defaults.object(forKey: Keys.notifyOnHealthDrop) as? Bool ?? true
+        notifyOnTemperatureAlert = defaults.object(forKey: Keys.notifyOnTemperatureAlert) as? Bool ?? false
+        showPercentInMenuBar = defaults.object(forKey: Keys.showPercentInMenuBar) as? Bool ?? true
+
+        let storedRefreshInterval = defaults.object(forKey: Keys.refreshIntervalSeconds) as? Int ??
+            Int(Constants.defaultRefreshInterval)
+        refreshIntervalSeconds = Self.clampRefreshInterval(storedRefreshInterval)
     }
 
     private enum Keys {
@@ -107,6 +172,15 @@ final class AppSettings: ObservableObject {
         static let warmTemperatureThreshold = "warmTemperatureThreshold"
         static let hotTemperatureThreshold = "hotTemperatureThreshold"
         static let chargeSchedule = "chargeSchedule"
+        static let isSailingModeEnabled = "sailingModeEnabled"
+        static let isHeatProtectionEnabled = "heatProtectionEnabled"
+        static let fanControlMode = "fanControlMode"
+        static let isManualFanCurveEnabled = "manualFanCurveEnabled"
+        static let notifyAtChargeLimit = "notifyAtChargeLimit"
+        static let notifyOnHealthDrop = "notifyOnHealthDrop"
+        static let notifyOnTemperatureAlert = "notifyOnTemperatureAlert"
+        static let showPercentInMenuBar = "showPercentInMenuBar"
+        static let refreshIntervalSeconds = "refreshIntervalSeconds"
     }
 
     private static func clampLimit(_ value: Int) -> Int {
@@ -134,5 +208,9 @@ final class AppSettings: ObservableObject {
             minute: min(59, max(0, schedule.minute)),
             isEnabled: schedule.isEnabled
         )
+    }
+
+    private static func clampRefreshInterval(_ value: Int) -> Int {
+        min(Int(Constants.maxRefreshInterval), max(Int(Constants.minRefreshInterval), value))
     }
 }

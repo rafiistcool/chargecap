@@ -1,6 +1,5 @@
 import Foundation
 import ServiceManagement
-import Security
 
 @MainActor
 final class PrivilegedHelperManager: ObservableObject {
@@ -39,31 +38,46 @@ final class PrivilegedHelperManager: ObservableObject {
         }
     }
 
-    func installIfNeeded() async throws {
+    func installIfNeeded(force: Bool = false) async throws {
+        if !force {
+            do {
+                _ = try await getVersion()
+                isInstalled = true
+                lastErrorDescription = nil
+                return
+            } catch {
+                isInstalled = false
+            }
+        }
+
+        do {
+            try registerDaemon()
+        } catch {
+            lastErrorDescription = error.localizedDescription
+            throw error
+        }
+
+        // Old connection is stale after registration; force a fresh one.
+        invalidateConnection()
+
+        try await Task.sleep(for: .seconds(2))
+
         do {
             _ = try await getVersion()
             isInstalled = true
             lastErrorDescription = nil
-            return
         } catch {
-            isInstalled = false
+            lastErrorDescription = error.localizedDescription
+            throw error
         }
-
-        try blessHelper()
-        try await Task.sleep(for: .seconds(1))
-        _ = try await getVersion()
-        isInstalled = true
-        lastErrorDescription = nil
     }
 
     func enableCharging() async throws {
-        try await writeSMCByte(key: "CH0B", value: 0x00)
-        try? await writeSMCByte(key: "CH0C", value: 0x00)
+        try await setChargingEnabled(true)
     }
 
     func disableCharging() async throws {
-        try await writeSMCByte(key: "CH0B", value: 0x02)
-        try? await writeSMCByte(key: "CH0C", value: 0x02)
+        try await setChargingEnabled(false)
     }
 
     func pauseCharging() async throws {
@@ -75,11 +89,7 @@ final class PrivilegedHelperManager: ObservableObject {
     }
 
     func batteryTemperatureFromSMC() async throws -> Double {
-        let rawValue = try await readSMCUInt32(key: "TB0T")
-        let highByte = UInt8((rawValue >> 24) & 0xFF)
-        let lowByte = UInt8((rawValue >> 16) & 0xFF)
-        let sign = highByte & 0x80 == 0 ? 1.0 : -1.0
-        return sign * (Double(highByte & 0x7F) + Double(lowByte) / 256.0)
+        try await readSMCTemperature(key: "TB0T")
     }
 
     func resetModifiedKeys() async {
@@ -107,6 +117,11 @@ final class PrivilegedHelperManager: ObservableObject {
         }
     }
 
+    private func invalidateConnection() {
+        _connection?.invalidate()
+        _connection = nil
+    }
+
     private var helperProxy: ChargeCapHelperProtocol? {
         let conn = connection
         var proxyError: Error?
@@ -124,69 +139,60 @@ final class PrivilegedHelperManager: ObservableObject {
         return proxy
     }
 
-    private func blessHelper() throws {
-        var authItem = kSMRightBlessPrivilegedHelper.withCString {
-            AuthorizationItem(name: $0, valueLength: 0, value: nil, flags: 0)
-        }
-        var authRights = withUnsafeMutablePointer(to: &authItem) {
-            AuthorizationRights(count: 1, items: $0)
-        }
-
-        let authFlags: AuthorizationFlags = [.interactionAllowed, .preAuthorize, .extendRights]
-        var authRef: AuthorizationRef?
-        let status = AuthorizationCreate(&authRights, nil, authFlags, &authRef)
-
-        guard status == errAuthorizationSuccess else {
-            throw HelperError.authorizationFailed(status)
-        }
-
-        var error: Unmanaged<CFError>?
-        let success = SMJobBless(
-            kSMDomainSystemLaunchd,
-            ChargeCapHelperConfiguration.helperIdentifier as CFString,
-            authRef,
-            &error
-        )
-
-        if let authorizationRef = authRef {
-            AuthorizationFree(authorizationRef, [])
-        }
-
-        guard success else {
-            let errorDescription = error?.takeRetainedValue().localizedDescription ?? "Unknown SMJobBless failure"
-            throw HelperError.installationFailed(errorDescription)
-        }
+    private func registerDaemon() throws {
+        let service = SMAppService.daemon(plistName: "com.chargecap.Helper.plist")
+        // Unregister first to ensure launchd picks up the new binary.
+        try? service.unregister()
+        try service.register()
     }
 
-    private static let xpcTimeout: Duration = .seconds(5)
+    private static let xpcTimeout: TimeInterval = 5
+
+    /// Wraps a continuation to guarantee exactly one resume, preventing leaks.
+    private final class SafeContinuation<T: Sendable>: @unchecked Sendable {
+        private var continuation: CheckedContinuation<T, Error>?
+        private let lock = NSLock()
+
+        init(_ continuation: CheckedContinuation<T, Error>) {
+            self.continuation = continuation
+        }
+
+        func resume(returning value: T) {
+            lock.lock()
+            let c = continuation
+            continuation = nil
+            lock.unlock()
+            c?.resume(returning: value)
+        }
+
+        func resume(throwing error: Error) {
+            lock.lock()
+            let c = continuation
+            continuation = nil
+            lock.unlock()
+            c?.resume(throwing: error)
+        }
+    }
 
     private func getVersion() async throws -> String {
         guard let helper = helperProxy else {
             throw HelperError.connectionUnavailable
         }
 
-        return try await withThrowingTaskGroup(of: String.self) { group in
-            group.addTask {
-                try await withCheckedThrowingContinuation { continuation in
-                    helper.getVersion { version in
-                        if version == ChargeCapHelperConfiguration.version {
-                            continuation.resume(returning: version)
-                        } else {
-                            continuation.resume(throwing: HelperError.versionMismatch(expected: ChargeCapHelperConfiguration.version, actual: version))
-                        }
-                    }
-                }
-            }
-            group.addTask {
-                try await Task.sleep(for: Self.xpcTimeout)
-                throw HelperError.connectionUnavailable
+        return try await withCheckedThrowingContinuation { raw in
+            let continuation = SafeContinuation(raw)
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
+                continuation.resume(throwing: HelperError.connectionUnavailable)
             }
 
-            guard let result = try await group.next() else {
-                throw HelperError.connectionUnavailable
+            helper.getVersion { version in
+                if version == ChargeCapHelperConfiguration.version {
+                    continuation.resume(returning: version)
+                } else {
+                    continuation.resume(throwing: HelperError.versionMismatch(expected: ChargeCapHelperConfiguration.version, actual: version))
+                }
             }
-            group.cancelAll()
-            return result
         }
     }
 
@@ -195,25 +201,42 @@ final class PrivilegedHelperManager: ObservableObject {
             throw HelperError.connectionUnavailable
         }
 
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask {
-                try await withCheckedThrowingContinuation { continuation in
-                    helper.writeSMCByte(key: key, value: value) { success, errorDescription in
-                        if success {
-                            continuation.resume()
-                        } else {
-                            continuation.resume(throwing: HelperError.writeFailed(key: key, description: errorDescription ?? "Unknown SMC write error"))
-                        }
-                    }
-                }
-            }
-            group.addTask {
-                try await Task.sleep(for: Self.xpcTimeout)
-                throw HelperError.connectionUnavailable
+        try await withCheckedThrowingContinuation { (raw: CheckedContinuation<Void, Error>) in
+            let continuation = SafeContinuation(raw)
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
+                continuation.resume(throwing: HelperError.connectionUnavailable)
             }
 
-            try await group.next()
-            group.cancelAll()
+            helper.writeSMCByte(key: key, value: value) { success, errorDescription in
+                if success {
+                    continuation.resume(returning: ())
+                } else {
+                    continuation.resume(throwing: HelperError.writeFailed(key: key, description: errorDescription ?? "Unknown SMC write error"))
+                }
+            }
+        }
+    }
+
+    private func setChargingEnabled(_ enabled: Bool) async throws {
+        guard let helper = helperProxy else {
+            throw HelperError.connectionUnavailable
+        }
+
+        try await withCheckedThrowingContinuation { (raw: CheckedContinuation<Void, Error>) in
+            let continuation = SafeContinuation(raw)
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
+                continuation.resume(throwing: HelperError.connectionUnavailable)
+            }
+
+            helper.setChargingEnabled(enabled) { success, errorDescription in
+                if success {
+                    continuation.resume(returning: ())
+                } else {
+                    continuation.resume(throwing: HelperError.chargingControlFailed(description: errorDescription ?? "Unknown error"))
+                }
+            }
         }
     }
 
@@ -222,43 +245,55 @@ final class PrivilegedHelperManager: ObservableObject {
             throw HelperError.connectionUnavailable
         }
 
-        return try await withThrowingTaskGroup(of: UInt32.self) { group in
-            group.addTask {
-                try await withCheckedThrowingContinuation { continuation in
-                    helper.readSMCUInt32(key: key) { value, errorDescription in
-                        if let errorDescription {
-                            continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
-                        } else {
-                            continuation.resume(returning: value)
-                        }
-                    }
-                }
-            }
-            group.addTask {
-                try await Task.sleep(for: Self.xpcTimeout)
-                throw HelperError.connectionUnavailable
+        return try await withCheckedThrowingContinuation { raw in
+            let continuation = SafeContinuation(raw)
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
+                continuation.resume(throwing: HelperError.connectionUnavailable)
             }
 
-            guard let result = try await group.next() else {
-                throw HelperError.connectionUnavailable
+            helper.readSMCUInt32(key: key) { value, errorDescription in
+                if let errorDescription {
+                    continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
+                } else {
+                    continuation.resume(returning: value)
+                }
             }
-            group.cancelAll()
-            return result
+        }
+    }
+
+    private func readSMCTemperature(key: String) async throws -> Double {
+        guard let helper = helperProxy else {
+            throw HelperError.connectionUnavailable
+        }
+
+        return try await withCheckedThrowingContinuation { raw in
+            let continuation = SafeContinuation(raw)
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
+                continuation.resume(throwing: HelperError.connectionUnavailable)
+            }
+
+            helper.readSMCTemperature(key: key) { value, errorDescription in
+                if let errorDescription {
+                    continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
+                } else {
+                    continuation.resume(returning: value)
+                }
+            }
         }
     }
 
     enum HelperError: LocalizedError {
-        case authorizationFailed(OSStatus)
         case installationFailed(String)
         case connectionUnavailable
         case versionMismatch(expected: String, actual: String)
         case writeFailed(key: String, description: String)
         case readFailed(key: String, description: String)
+        case chargingControlFailed(description: String)
 
         var errorDescription: String? {
             switch self {
-            case .authorizationFailed(let status):
-                return SecCopyErrorMessageString(status, nil) as String? ?? "Authorization failed (\(status))"
             case .installationFailed(let description):
                 return "Helper install failed: \(description)"
             case .connectionUnavailable:
@@ -269,6 +304,8 @@ final class PrivilegedHelperManager: ObservableObject {
                 return "Failed to write \(key): \(description)"
             case .readFailed(let key, let description):
                 return "Failed to read \(key): \(description)"
+            case .chargingControlFailed(let description):
+                return "Charging control failed: \(description)"
             }
         }
     }

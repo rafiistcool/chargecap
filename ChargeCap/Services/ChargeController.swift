@@ -32,6 +32,7 @@ final class ChargeController: ObservableObject {
         self.calendar = calendar
         self.state = Self.makeInitialState(settings: settings)
 
+        monitor.updateRefreshInterval(seconds: settings.refreshIntervalSeconds)
         bind()
 
         Task {
@@ -40,9 +41,9 @@ final class ChargeController: ObservableObject {
         }
     }
 
-    func installHelper() async {
+    func installHelper(force: Bool = false) async {
         do {
-            try await helperManager.installIfNeeded()
+            try await helperManager.installIfNeeded(force: force)
             state.lastErrorDescription = nil
             evaluate(using: monitor.batteryState)
         } catch {
@@ -69,6 +70,14 @@ final class ChargeController: ObservableObject {
 
     func updateSailingRange(_ value: Int) {
         settings.sailingRange = value
+    }
+
+    func updateSailingModeEnabled(_ enabled: Bool) {
+        settings.isSailingModeEnabled = enabled
+    }
+
+    func updateHeatProtectionEnabled(_ enabled: Bool) {
+        settings.isHeatProtectionEnabled = enabled
     }
 
     func updateWarmTemperatureThreshold(_ value: Int) {
@@ -113,14 +122,18 @@ final class ChargeController: ObservableObject {
             settings.$isChargeLimitingEnabled.map { _ in () }.eraseToAnyPublisher(),
             settings.$targetChargeLimit.map { _ in () }.eraseToAnyPublisher(),
             settings.$sailingRange.map { _ in () }.eraseToAnyPublisher(),
+            settings.$isSailingModeEnabled.map { _ in () }.eraseToAnyPublisher(),
+            settings.$isHeatProtectionEnabled.map { _ in () }.eraseToAnyPublisher(),
             settings.$warmTemperatureThreshold.map { _ in () }.eraseToAnyPublisher(),
             settings.$hotTemperatureThreshold.map { _ in () }.eraseToAnyPublisher(),
-            settings.$chargeSchedule.map { _ in () }.eraseToAnyPublisher()
+            settings.$chargeSchedule.map { _ in () }.eraseToAnyPublisher(),
+            settings.$refreshIntervalSeconds.map { _ in () }.eraseToAnyPublisher()
         )
             .receive(on: RunLoop.main)
             .sink { [weak self] (_: Void) in
                 guard let self else { return }
                 self.state = Self.state(from: self.state, settings: self.settings)
+                self.monitor.updateRefreshInterval(seconds: self.settings.refreshIntervalSeconds)
                 self.evaluate(using: self.monitor.batteryState)
             }
             .store(in: &cancellables)
@@ -210,12 +223,14 @@ final class ChargeController: ObservableObject {
 
         let roundedTemperature = Int(batteryState.temperature.rounded())
 
-        if roundedTemperature >= state.hotTemperatureThreshold {
-            return (.heatProtectionStopped, .inhibit)
-        }
+        if state.isHeatProtectionEnabled {
+            if roundedTemperature >= state.hotTemperatureThreshold {
+                return (.heatProtectionStopped, .inhibit)
+            }
 
-        if roundedTemperature >= state.warmTemperatureThreshold {
-            return (.heatProtectionPaused, .pause)
+            if roundedTemperature >= state.warmTemperatureThreshold {
+                return (.heatProtectionPaused, .pause)
+            }
         }
 
         if !batteryState.isPluggedIn {
@@ -230,7 +245,7 @@ final class ChargeController: ObservableObject {
             return (.chargingToLimit, .normal)
         }
 
-        if lastCommand == .inhibit || lastCommand == .pause {
+        if state.isSailingModeEnabled, lastCommand == .inhibit || lastCommand == .pause {
             return (.sailing, .inhibit)
         }
 
@@ -304,7 +319,7 @@ final class ChargeController: ObservableObject {
 
     private var shouldRefreshTelemetry: Bool {
         guard let lastTelemetryRefresh else { return true }
-        return Date.now.timeIntervalSince(lastTelemetryRefresh) >= Constants.refreshInterval
+        return Date.now.timeIntervalSince(lastTelemetryRefresh) >= TimeInterval(settings.refreshIntervalSeconds)
     }
 
     private static func makeInitialState(settings: AppSettings) -> ChargeControlState {
@@ -318,6 +333,8 @@ final class ChargeController: ObservableObject {
         nextState.warmTemperatureThreshold = settings.warmTemperatureThreshold
         nextState.hotTemperatureThreshold = settings.hotTemperatureThreshold
         nextState.isEnabled = settings.isChargeLimitingEnabled
+        nextState.isSailingModeEnabled = settings.isSailingModeEnabled
+        nextState.isHeatProtectionEnabled = settings.isHeatProtectionEnabled
         return nextState
     }
 }

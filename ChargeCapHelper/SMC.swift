@@ -94,6 +94,7 @@ struct DataType: Equatable {
 enum DataTypes {
     static let UInt8 = DataType(type: FourCharCode(fromString: "ui8 "), size: 1)
     static let UInt32 = DataType(type: FourCharCode(fromString: "ui32"), size: 4)
+    static let SP78 = DataType(type: FourCharCode(fromString: "sp78"), size: 2)
 }
 
 struct SMCKey {
@@ -102,20 +103,42 @@ struct SMCKey {
 }
 
 enum SMCKit {
-    enum SMCError: Error {
+    enum SMCError: LocalizedError {
         case driverNotFound
-        case failedToOpen
+        case failedToOpen(kern_return_t)
         case keyNotFound(String)
         case notPrivileged
         case unknown(kern_return_t, UInt8)
+
+        var errorDescription: String? {
+            switch self {
+            case .driverNotFound:
+                return "SMC driver not found"
+            case .failedToOpen(let result):
+                return "Failed to open SMC driver: 0x\(String(result, radix: 16))"
+            case .keyNotFound(let key):
+                return "SMC key not found: \(key)"
+            case .notPrivileged:
+                return "Not privileged to access SMC"
+            case .unknown(let result, let smcResult):
+                return "SMC error: IOKit=0x\(String(result, radix: 16)), SMC=\(smcResult)"
+            }
+        }
     }
 
     private static var connection: io_connect_t = 0
+    private static let lock = NSLock()
 
     static func open() throws {
+        lock.lock()
+        defer { lock.unlock() }
+
         if connection != 0 { return }
 
-        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
+        var service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMCKeysEndpoint"))
+        if service == 0 {
+            service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
+        }
         if service == 0 {
             throw SMCError.driverNotFound
         }
@@ -124,12 +147,14 @@ enum SMCKit {
         IOObjectRelease(service)
 
         if result != kIOReturnSuccess {
-            throw SMCError.failedToOpen
+            throw SMCError.failedToOpen(result)
         }
     }
 
     @discardableResult
     static func close() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
         guard connection != 0 else { return true }
         let result = IOServiceClose(connection)
         connection = 0
@@ -138,6 +163,17 @@ enum SMCKit {
 
     static func getKey(_ code: String, type: DataType) -> SMCKey {
         SMCKey(code: FourCharCode(fromString: code), info: type)
+    }
+
+    static func keyInfo(_ code: String) throws -> SMCParamStruct.SMCKeyInfoData {
+        var input = SMCParamStruct()
+        input.key = FourCharCode(fromString: code)
+        input.data8 = SMCParamStruct.Selector.getKeyInfo.rawValue
+        return try callDriver(&input).keyInfo
+    }
+
+    static func keyExists(_ code: String) -> Bool {
+        return (try? keyInfo(code)) != nil
     }
 
     static func readData(_ key: SMCKey) throws -> SMCBytes {
@@ -161,6 +197,13 @@ enum SMCKit {
 
     private static func callDriver(_ input: inout SMCParamStruct) throws -> SMCParamStruct {
         precondition(MemoryLayout<SMCParamStruct>.stride == 80, "SMCParamStruct must be 80 bytes")
+
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard connection != 0 else {
+            throw SMCError.driverNotFound
+        }
 
         var output = SMCParamStruct()
         let inputSize = MemoryLayout<SMCParamStruct>.stride
