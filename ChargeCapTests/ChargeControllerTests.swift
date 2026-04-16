@@ -187,6 +187,22 @@ final class ChargeControllerTests: XCTestCase {
         XCTAssertEqual(result.command, .normal)
     }
 
+    func testSailingDisabled_lastCommandPause_keepsCharging() {
+        let battery = makeBatteryState(chargePercent: 76)
+        let state = makeControlState(targetLimit: 80, sailingRange: 5, isSailingModeEnabled: false)
+
+        let result = ChargeController.desiredState(
+            for: battery,
+            controlState: state,
+            lastCommand: .pause,
+            shouldTopOffToFull: false,
+            nextSchedule: nil
+        )
+
+        XCTAssertEqual(result.status, .chargingToLimit)
+        XCTAssertEqual(result.command, .normal)
+    }
+
     // MARK: - Edge case: 100% limit (no limiting needed)
 
     func testCharging_100PercentLimit_belowLimit_keepsCharging() {

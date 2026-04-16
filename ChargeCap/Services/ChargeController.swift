@@ -248,7 +248,7 @@ final class ChargeController: ObservableObject {
             return (.chargingToLimit, .normal)
         }
 
-        if controlState.isSailingModeEnabled, lastCommand == .inhibit || lastCommand == .pause {
+        if controlState.isSailingModeEnabled && (lastCommand == .inhibit || lastCommand == .pause) {
             return (.sailing, .inhibit)
         }
 
