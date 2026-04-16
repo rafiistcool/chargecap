@@ -260,7 +260,7 @@ struct MenuBarView: View {
     private var gpuMonitorSection: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
-                Image(systemName: "gpu")
+                Image(systemName: "square.stack.3d.up.fill")
                     .foregroundStyle(.purple)
                 Text("GPU")
                     .fontWeight(.medium)

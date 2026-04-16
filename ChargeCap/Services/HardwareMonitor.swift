@@ -2,6 +2,18 @@ import Combine
 import Darwin
 import Foundation
 
+// MARK: - Safe Float → Int conversion
+
+private extension Float {
+    /// Converts to `Int`, returning `fallback` if the value is NaN, infinite,
+    /// or outside the representable range. Prevents fatal traps on garbage SMC data.
+    func safeInt(clampedTo range: ClosedRange<Int> = 0...100_000, fallback: Int = 0) -> Int {
+        guard isFinite else { return fallback }
+        let clamped = Swift.max(Float(range.lowerBound), Swift.min(Float(range.upperBound), self))
+        return Int(clamped.rounded())
+    }
+}
+
 /// Reads CPU usage, memory usage, and SMC sensor data (temperatures, fans) on a timer.
 @MainActor
 final class HardwareMonitor: ObservableObject {
@@ -266,9 +278,9 @@ final class HardwareMonitor: ObservableObject {
 
                 let fan = FanInfo(
                     index: i,
-                    rpm: Int(rpm.rounded()),
-                    minRPM: Int(minRPM.rounded()),
-                    maxRPM: Int(maxRPM.rounded())
+                    rpm: rpm.safeInt(),
+                    minRPM: minRPM.safeInt(),
+                    maxRPM: maxRPM.safeInt()
                 )
                 fans.append(fan)
             } catch {
