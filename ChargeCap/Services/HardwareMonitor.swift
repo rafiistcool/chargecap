@@ -86,15 +86,8 @@ final class HardwareMonitor: ObservableObject {
         fans = fanReadings
 
         // Extract key temperatures for quick access
-        cpuTemperature = 0.0
-        gpuTemperature = 0.0
-
-        if let cpuTemp = tempReadings.first(where: { $0.key == "TC0C" || $0.key == "TC0P" }) {
-            cpuTemperature = cpuTemp.value
-        }
-        if let gpuTemp = tempReadings.first(where: { $0.key == "GC0C" }) {
-            gpuTemperature = gpuTemp.value
-        }
+        cpuTemperature = tempReadings.first(where: { $0.key == "TC0C" || $0.key == "TC0P" })?.value ?? 0.0
+        gpuTemperature = tempReadings.first(where: { $0.key == "GC0C" })?.value ?? 0.0
     }
 
     // MARK: - CPU Usage (Mach Kernel API)
