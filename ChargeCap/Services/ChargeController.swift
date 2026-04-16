@@ -212,8 +212,11 @@ final class ChargeController: ObservableObject {
         }
     }
 
-    private func desiredState(
+    /// Pure-logic decision engine; static so it can be unit-tested without dependencies.
+    nonisolated static func desiredState(
         for batteryState: BatteryState,
+        controlState: ChargeControlState,
+        lastCommand: ChargeCommand?,
         shouldTopOffToFull: Bool,
         nextSchedule: Date?
     ) -> (status: ChargeLimitStatus, command: ChargeCommand) {
@@ -223,12 +226,12 @@ final class ChargeController: ObservableObject {
 
         let roundedTemperature = Int(batteryState.temperature.rounded())
 
-        if state.isHeatProtectionEnabled {
-            if roundedTemperature >= state.hotTemperatureThreshold {
+        if controlState.isHeatProtectionEnabled {
+            if roundedTemperature >= controlState.hotTemperatureThreshold {
                 return (.heatProtectionStopped, .inhibit)
             }
 
-            if roundedTemperature >= state.warmTemperatureThreshold {
+            if roundedTemperature >= controlState.warmTemperatureThreshold {
                 return (.heatProtectionPaused, .pause)
             }
         }
@@ -237,26 +240,44 @@ final class ChargeController: ObservableObject {
             return (.idle, .normal)
         }
 
-        if batteryState.chargePercent >= state.targetLimit {
+        if batteryState.chargePercent >= controlState.targetLimit {
             return (.limitReached, .inhibit)
         }
 
-        if batteryState.chargePercent <= state.resumeThreshold {
+        if batteryState.chargePercent <= controlState.resumeThreshold {
             return (.chargingToLimit, .normal)
         }
 
-        if state.isSailingModeEnabled, lastCommand == .inhibit || lastCommand == .pause {
+        if controlState.isSailingModeEnabled && (lastCommand == .inhibit || lastCommand == .pause) {
             return (.sailing, .inhibit)
         }
 
         return (.chargingToLimit, .normal)
     }
 
-    private func shouldChargeToFull(batteryState: BatteryState, nextSchedule: Date?) -> Bool {
+    private func desiredState(
+        for batteryState: BatteryState,
+        shouldTopOffToFull: Bool,
+        nextSchedule: Date?
+    ) -> (status: ChargeLimitStatus, command: ChargeCommand) {
+        Self.desiredState(
+            for: batteryState,
+            controlState: state,
+            lastCommand: lastCommand,
+            shouldTopOffToFull: shouldTopOffToFull,
+            nextSchedule: nextSchedule
+        )
+    }
+
+    /// Pure-logic schedule check; static so it can be unit-tested without dependencies.
+    nonisolated static func shouldChargeToFull(
+        batteryState: BatteryState,
+        nextSchedule: Date?,
+        now: Date = .now
+    ) -> Bool {
         guard let nextSchedule else { return false }
         guard batteryState.isPluggedIn else { return false }
 
-        let now = Date.now
         guard nextSchedule > now else { return false }
 
         let minutesUntilSchedule = Int(nextSchedule.timeIntervalSince(now) / 60)
@@ -270,6 +291,10 @@ final class ChargeController: ObservableObject {
         }
 
         return chargeNeeded > 0 && minutesUntilSchedule <= estimatedMinutesToFull
+    }
+
+    private func shouldChargeToFull(batteryState: BatteryState, nextSchedule: Date?) -> Bool {
+        Self.shouldChargeToFull(batteryState: batteryState, nextSchedule: nextSchedule)
     }
 
     private func enqueueCommand(_ command: ChargeCommand) {
@@ -322,11 +347,11 @@ final class ChargeController: ObservableObject {
         return Date.now.timeIntervalSince(lastTelemetryRefresh) >= TimeInterval(settings.refreshIntervalSeconds)
     }
 
-    private static func makeInitialState(settings: AppSettings) -> ChargeControlState {
+    static func makeInitialState(settings: AppSettings) -> ChargeControlState {
         Self.state(from: ChargeControlState.default, settings: settings)
     }
 
-    private static func state(from state: ChargeControlState, settings: AppSettings) -> ChargeControlState {
+    static func state(from state: ChargeControlState, settings: AppSettings) -> ChargeControlState {
         var nextState = state
         nextState.targetLimit = settings.targetChargeLimit
         nextState.sailingRange = settings.sailingRange

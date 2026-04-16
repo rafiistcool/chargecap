@@ -426,8 +426,8 @@ struct SettingsView: View {
     }
 
     private var proButtonTitle: String {
-        if let product = proManager.product {
-            return "Upgrade to Pro \(product.displayPrice)"
+        if let price = proManager.productDisplayPrice {
+            return "Upgrade to Pro \(price)"
         }
         return "Upgrade to Pro \(Constants.Pro.price)"
     }

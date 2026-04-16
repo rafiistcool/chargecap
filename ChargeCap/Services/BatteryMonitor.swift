@@ -5,6 +5,33 @@ import IOKit.ps
 
 /// Reads battery information from IOKit and the IORegistry using a configurable refresh interval.
 final class BatteryMonitor: ObservableObject {
+    struct PowerSourceSnapshot: Equatable {
+        let chargePercent: Int
+        let isCharging: Bool
+        let isPluggedIn: Bool
+        let timeToFull: Int
+        let timeToEmpty: Int
+        let condition: BatteryCondition
+    }
+
+    struct RegistrySnapshot: Equatable {
+        let cycleCount: Int
+        let designCapacity: Int
+        let maxCapacity: Int
+        let temperature: Double
+        let healthPercent: Int
+        let adapterWattage: Int
+
+        static let empty = RegistrySnapshot(
+            cycleCount: 0,
+            designCapacity: 0,
+            maxCapacity: 0,
+            temperature: 0,
+            healthPercent: 100,
+            adapterWattage: 0
+        )
+    }
+
     @Published private(set) var batteryState: BatteryState
 
     @Published private(set) var smcBatteryRate: Int?
@@ -20,8 +47,9 @@ final class BatteryMonitor: ObservableObject {
     private static let percentageRange = 1...100
     private static let maxReasonableCapacityMultiplier = 2
 
-    init() {
+    init(startMonitoring: Bool = true) {
         batteryState = BatteryState.placeholder
+        guard startMonitoring else { return }
         refresh()
         startTimer()
     }
@@ -110,41 +138,23 @@ final class BatteryMonitor: ObservableObject {
         }
         let sourcesList = rawList as [CFTypeRef]
 
-        var chargePercent = 0
-        var isCharging    = false
-        var isPluggedIn   = false
-        var timeToFull    = 0
-        var timeToEmpty   = 0
-        var condition     = BatteryCondition.unknown
-        var hasBattery    = false
+        var powerSourceSnapshot: PowerSourceSnapshot?
 
         for source in sourcesList {
             guard
                 let desc = IOPSGetPowerSourceDescription(rawInfo, source)?
                     .takeUnretainedValue() as? [String: Any],
-                let type = desc[kIOPSTypeKey] as? String,
-                type == kIOPSInternalBatteryType
+                let parsedDescription = parsePowerSourceDescription(desc)
             else { continue }
 
-            hasBattery    = true
-            chargePercent = desc[kIOPSCurrentCapacityKey] as? Int ?? 0
-            isCharging    = desc[kIOPSIsChargingKey] as? Bool ?? false
-            isPluggedIn   = (desc[kIOPSPowerSourceStateKey] as? String) == kIOPSACPowerValue
-            timeToFull    = desc[kIOPSTimeToFullChargeKey] as? Int ?? 0
-            timeToEmpty   = desc[kIOPSTimeToEmptyKey] as? Int ?? 0
-            condition     = BatteryCondition(ioKitString: desc[kIOPSBatteryHealthConditionKey] as? String)
+            powerSourceSnapshot = parsedDescription
             break
         }
 
-        guard hasBattery else { return .noBattery }
+        guard let powerSourceSnapshot else { return .noBattery }
 
         // ── 2. IORegistry — AppleSmartBattery ────────────────────────────────
-        var cycleCount      = 0
-        var designCapacity  = 0
-        var maxCapacity     = 0
-        var temperature     = 0.0
-        var healthPercent   = 100
-        var adapterWattage  = 0
+        var registrySnapshot = RegistrySnapshot.empty
 
         let service = IOServiceGetMatchingService(
             kIOMainPortDefault,
@@ -160,51 +170,15 @@ final class BatteryMonitor: ObservableObject {
             ) == KERN_SUCCESS,
                let dict = props?.takeRetainedValue() as? [String: Any]
             {
-                cycleCount     = firstPositiveIntValueForKeys(in: dict, keys: ["CycleCount"]) ?? 0
-                designCapacity = firstPositiveIntValueForKeys(in: dict, keys: ["DesignCapacity"]) ?? 0
-                maxCapacity    = resolveMaxCapacity(in: dict, designCapacity: designCapacity)
-
-                // Temperature from AppleSmartBattery is in decikelvin (e.g. 2984 → 298.4K → 25.25°C)
-                let tempRaw = firstPositiveIntValueForKeys(in: dict, keys: ["Temperature"]) ?? 0
-                temperature = Double(tempRaw) / 10.0 - 273.15
-
-                healthPercent = resolveHealthPercent(
-                    in: dict,
-                    designCapacity: designCapacity,
-                    maxCapacity: maxCapacity
-                )
-
-                if let adapterDict = dict["AdapterDetails"] as? [String: Any],
-                   let watts = firstPositiveIntValueForKeys(in: adapterDict, keys: ["Watts"])
-                {
-                    adapterWattage = watts
-                }
+                registrySnapshot = parseRegistryProperties(dict)
             }
         }
 
         // ── 3. Model-specific max cycle count ────────────────────────────────
-        let maxCycleCount = modelMaxCycleCount()
-
-        return BatteryState(
-            chargePercent:  chargePercent,
-            isCharging:     isCharging,
-            isPluggedIn:    isPluggedIn,
-            chargeLimit:    nil,
-            batteryRate:    nil,
-            // IOKit returns -1 for time values when the estimate is still calculating;
-            // max(0, ...) converts that sentinel to 0 (meaning "unavailable").
-            timeToFull:     max(0, timeToFull),
-            timeToEmpty:    max(0, timeToEmpty),
-            healthPercent:  healthPercent,
-            condition:      condition,
-            cycleCount:     cycleCount,
-            maxCycleCount:  maxCycleCount,
-            temperature:    temperature,
-            designCapacity: designCapacity,
-            maxCapacity:    maxCapacity,
-            adapterWattage: adapterWattage,
-            isChargeInhibited: false,
-            hasBattery:     true
+        return makeBatteryState(
+            powerSource: powerSourceSnapshot,
+            registry: registrySnapshot,
+            maxCycleCount: modelMaxCycleCount()
         )
     }
 
@@ -283,7 +257,83 @@ final class BatteryMonitor: ObservableObject {
         return maxCycles[modelString] ?? 1000
     }
 
-    private static func firstPositiveIntValueForKeys(in dict: [String: Any], keys: [String]) -> Int? {
+    static func parsePowerSourceDescription(_ desc: [String: Any]) -> PowerSourceSnapshot? {
+        guard let type = desc[kIOPSTypeKey] as? String, type == kIOPSInternalBatteryType else {
+            return nil
+        }
+
+        return PowerSourceSnapshot(
+            chargePercent: min(100, max(0, desc[kIOPSCurrentCapacityKey] as? Int ?? 0)),
+            isCharging: desc[kIOPSIsChargingKey] as? Bool ?? false,
+            isPluggedIn: (desc[kIOPSPowerSourceStateKey] as? String) == kIOPSACPowerValue,
+            // IOKit returns -1 while estimates are still calculating; treat that as unavailable.
+            timeToFull: max(0, desc[kIOPSTimeToFullChargeKey] as? Int ?? 0),
+            timeToEmpty: max(0, desc[kIOPSTimeToEmptyKey] as? Int ?? 0),
+            condition: BatteryCondition(ioKitString: desc[kIOPSBatteryHealthConditionKey] as? String)
+        )
+    }
+
+    static func parseRegistryProperties(_ dict: [String: Any]) -> RegistrySnapshot {
+        let cycleCount = firstPositiveIntValueForKeys(in: dict, keys: ["CycleCount"]) ?? 0
+        let designCapacity = firstPositiveIntValueForKeys(in: dict, keys: ["DesignCapacity"]) ?? 0
+        let maxCapacity = resolveMaxCapacity(in: dict, designCapacity: designCapacity)
+
+        // Temperature from AppleSmartBattery is in decikelvin (e.g. 2984 -> 298.4K -> 25.25C).
+        let tempRaw = firstPositiveIntValueForKeys(in: dict, keys: ["Temperature"]) ?? 0
+        let temperature = tempRaw > 0 ? Double(tempRaw) / 10.0 - 273.15 : 0
+
+        let healthPercent = resolveHealthPercent(
+            in: dict,
+            designCapacity: designCapacity,
+            maxCapacity: maxCapacity
+        )
+
+        let adapterWattage: Int
+        if let adapterDict = dict["AdapterDetails"] as? [String: Any],
+           let watts = firstPositiveIntValueForKeys(in: adapterDict, keys: ["Watts"])
+        {
+            adapterWattage = watts
+        } else {
+            adapterWattage = 0
+        }
+
+        return RegistrySnapshot(
+            cycleCount: cycleCount,
+            designCapacity: designCapacity,
+            maxCapacity: maxCapacity,
+            temperature: temperature,
+            healthPercent: healthPercent,
+            adapterWattage: adapterWattage
+        )
+    }
+
+    static func makeBatteryState(
+        powerSource: PowerSourceSnapshot,
+        registry: RegistrySnapshot = .empty,
+        maxCycleCount: Int
+    ) -> BatteryState {
+        BatteryState(
+            chargePercent: powerSource.chargePercent,
+            isCharging: powerSource.isCharging,
+            isPluggedIn: powerSource.isPluggedIn,
+            chargeLimit: nil,
+            batteryRate: nil,
+            timeToFull: powerSource.timeToFull,
+            timeToEmpty: powerSource.timeToEmpty,
+            healthPercent: registry.healthPercent,
+            condition: powerSource.condition,
+            cycleCount: registry.cycleCount,
+            maxCycleCount: maxCycleCount,
+            temperature: registry.temperature,
+            designCapacity: registry.designCapacity,
+            maxCapacity: registry.maxCapacity,
+            adapterWattage: registry.adapterWattage,
+            isChargeInhibited: false,
+            hasBattery: true
+        )
+    }
+
+    static func firstPositiveIntValueForKeys(in dict: [String: Any], keys: [String]) -> Int? {
         for key in keys {
             if let value = dict[key] as? Int, value > 0 {
                 return value
@@ -297,7 +347,7 @@ final class BatteryMonitor: ObservableObject {
         return nil
     }
 
-    private static func resolveMaxCapacity(in dict: [String: Any], designCapacity: Int) -> Int {
+    static func resolveMaxCapacity(in dict: [String: Any], designCapacity: Int) -> Int {
         let reportedMaxCapacity = firstPositiveIntValueForKeys(in: dict, keys: ["MaxCapacity"])
         let rawMaxCapacity = firstPositiveIntValueForKeys(in: dict, keys: ["AppleRawMaxCapacity"])
         let nominalChargeCapacity = firstPositiveIntValueForKeys(in: dict, keys: ["NominalChargeCapacity"])
@@ -325,7 +375,7 @@ final class BatteryMonitor: ObservableObject {
         return Int((Double(designCapacity) * Double(fallbackPercent) / 100.0).rounded())
     }
 
-    private static func resolveHealthPercent(
+    static func resolveHealthPercent(
         in dict: [String: Any],
         designCapacity: Int,
         maxCapacity: Int
@@ -344,7 +394,7 @@ final class BatteryMonitor: ObservableObject {
         return min(100, Int((Double(maxCapacity) / Double(designCapacity) * 100.0).rounded()))
     }
 
-    private static func isPercentageValue(_ value: Int) -> Bool {
+    static func isPercentageValue(_ value: Int) -> Bool {
         percentageRange.contains(value)
     }
 }
