@@ -26,7 +26,7 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
                 // Apple Silicon ("Tahoe"): CHTE is UInt32
                 try captureOriginalUInt32Value(for: "CHTE")
                 let key = SMCKit.getKey("CHTE", type: DataTypes.UInt32)
-                // CHTE uses the first payload byte (0x01,0x00,0x00,0x00) to inhibit charging.
+                // CHTE inhibits charging when written as big-endian bytes 0x01,0x00,0x00,0x00.
                 let value: UInt32 = enabled ? 0x00000000 : 0x01000000
                 try SMCKit.writeData(key, data: smcBytes(from: value))
             } else if hasCHWA {
