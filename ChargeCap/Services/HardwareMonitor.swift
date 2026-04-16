@@ -40,6 +40,10 @@ final class HardwareMonitor: ObservableObject {
         startTimer()
     }
 
+    deinit {
+        timer?.cancel()
+    }
+
     private func startTimer() {
         // Do an initial read immediately
         Task { await refresh() }
@@ -64,7 +68,13 @@ final class HardwareMonitor: ObservableObject {
         memory = memoryResult
 
         // SMC reads require the privileged helper
-        guard helperManager.isInstalled else { return }
+        guard helperManager.isInstalled else {
+            cpuTemperature = 0.0
+            gpuTemperature = 0.0
+            fans = []
+            sensors = []
+            return
+        }
 
         // Read all SMC data concurrently
         async let temps = readTemperatures()
@@ -76,6 +86,9 @@ final class HardwareMonitor: ObservableObject {
         fans = fanReadings
 
         // Extract key temperatures for quick access
+        cpuTemperature = 0.0
+        gpuTemperature = 0.0
+
         if let cpuTemp = tempReadings.first(where: { $0.key == "TC0C" || $0.key == "TC0P" }) {
             cpuTemperature = cpuTemp.value
         }
@@ -248,7 +261,7 @@ final class HardwareMonitor: ObservableObject {
 
         var fans: [FanInfo] = []
 
-        for i in 0..<min(fanCount, 8) {
+        for i in 0..<fanCount {
             let actualKey = "F\(i)Ac"
             let minKey = "F\(i)Mn"
             let maxKey = "F\(i)Mx"

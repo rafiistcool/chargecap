@@ -27,14 +27,8 @@ extension Double {
 
 extension Float {
     init(fromSMCBytes bytes: (UInt8, UInt8, UInt8, UInt8)) {
-        var raw: UInt32 =
-            (UInt32(bytes.0) << 24) |
-            (UInt32(bytes.1) << 16) |
-            (UInt32(bytes.2) << 8) |
-            UInt32(bytes.3)
-        self = withUnsafePointer(to: &raw) {
-            $0.withMemoryRebound(to: Float.self, capacity: 1) { $0.pointee }
-        }
+        let raw = UInt32(fromBytes: bytes)
+        self = Float(bitPattern: raw)
     }
 }
 
