@@ -5,6 +5,7 @@ struct MenuBarView: View {
     @EnvironmentObject private var monitor: BatteryMonitor
     @EnvironmentObject private var controller: ChargeController
     @EnvironmentObject private var proManager: ProManager
+    @EnvironmentObject private var hardwareMonitor: HardwareMonitor
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -23,6 +24,14 @@ struct MenuBarView: View {
                 cyclesAndTempSection(state)
                 Divider()
                 hardwareSection(state)
+                Divider()
+                cpuMonitorSection
+                Divider()
+                gpuMonitorSection
+                Divider()
+                fanMonitorSection
+                Divider()
+                memoryMonitorSection
                 Divider()
             } else {
                 Label("No battery detected.", systemImage: "desktopcomputer")
@@ -210,6 +219,150 @@ struct MenuBarView: View {
         .padding(.vertical, 8)
     }
 
+    // MARK: - Hardware Monitoring Sections
+
+    private var cpuMonitorSection: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Image(systemName: "cpu")
+                    .foregroundStyle(.blue)
+                Text("CPU")
+                    .fontWeight(.medium)
+                Spacer()
+            }
+
+            HStack(spacing: 6) {
+                Text("Usage:")
+                    .foregroundStyle(.secondary)
+                Text(String(format: "%.0f%%", hardwareMonitor.cpuUsage))
+                    .monospacedDigit()
+                Spacer()
+                usageBar(percent: hardwareMonitor.cpuUsage)
+            }
+            .font(.subheadline)
+
+            if hardwareMonitor.cpuTemperature > 0 {
+                HStack {
+                    Text("Temp:")
+                        .foregroundStyle(.secondary)
+                    Text(String(format: "%.0f\u{00B0}C", hardwareMonitor.cpuTemperature))
+                        .monospacedDigit()
+                        .foregroundStyle(temperatureColor(hardwareMonitor.cpuTemperature))
+                    Spacer()
+                }
+                .font(.subheadline)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    private var gpuMonitorSection: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Image(systemName: "square.stack.3d.up.fill")
+                    .foregroundStyle(.purple)
+                Text("GPU")
+                    .fontWeight(.medium)
+                Spacer()
+            }
+
+            if hardwareMonitor.gpuTemperature > 0 {
+                HStack {
+                    Text("Temp:")
+                        .foregroundStyle(.secondary)
+                    Text(String(format: "%.0f\u{00B0}C", hardwareMonitor.gpuTemperature))
+                        .monospacedDigit()
+                        .foregroundStyle(temperatureColor(hardwareMonitor.gpuTemperature))
+                    Spacer()
+                }
+                .font(.subheadline)
+            } else {
+                Text("Unified with CPU (Apple Silicon)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    private var fanMonitorSection: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Image(systemName: "fan.fill")
+                    .foregroundStyle(.cyan)
+                Text("Fans")
+                    .fontWeight(.medium)
+                Spacer()
+            }
+
+            if hardwareMonitor.fans.isEmpty {
+                Text("No fans detected")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(hardwareMonitor.fans) { fan in
+                    HStack {
+                        Text("Fan \(fan.index):")
+                            .foregroundStyle(.secondary)
+                        Text("\(fan.rpmFormatted) RPM")
+                            .monospacedDigit()
+                        Spacer()
+                        if fan.maxRPM > 0 {
+                            usageBar(percent: Double(fan.rpm) / Double(fan.maxRPM) * 100)
+                        }
+                    }
+                    .font(.subheadline)
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    private var memoryMonitorSection: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Image(systemName: "memorychip")
+                    .foregroundStyle(.orange)
+                Text("Memory")
+                    .fontWeight(.medium)
+                Spacer()
+            }
+
+            HStack {
+                Text(String(format: "%.1f / %.0f GB used", hardwareMonitor.memory.usedGB, hardwareMonitor.memory.totalGB))
+                    .font(.subheadline)
+                    .monospacedDigit()
+                Spacer()
+                usageBar(percent: hardwareMonitor.memory.usagePercent)
+            }
+
+            if hardwareMonitor.memory.swapUsed > 0 {
+                HStack {
+                    Text("Swap:")
+                        .foregroundStyle(.secondary)
+                    Text(String(format: "%.1f GB", hardwareMonitor.memory.swapUsedGB))
+                        .monospacedDigit()
+                    Spacer()
+                }
+                .font(.subheadline)
+            }
+
+            HStack {
+                Text("Pressure:")
+                    .foregroundStyle(.secondary)
+                Text(hardwareMonitor.memory.pressure.rawValue)
+                    .foregroundStyle(memoryPressureColor(hardwareMonitor.memory.pressure))
+                Spacer()
+            }
+            .font(.subheadline)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
     // MARK: - Helpers
 
     private func batteryIconColor(for state: BatteryState) -> Color {
@@ -266,6 +419,39 @@ struct MenuBarView: View {
         guard state.adapterWattage > 0 else { return "Connected" }
         return "\(state.adapterWattage)W USB-C"
     }
+
+    private func usageBar(percent: Double) -> some View {
+        let clampedPercent = min(100, max(0, percent))
+        let filledBlocks = Int((clampedPercent / 100) * 10)
+
+        return HStack(spacing: 1) {
+            ForEach(0..<10, id: \.self) { i in
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(i < filledBlocks ? barColor(for: clampedPercent) : Color.gray.opacity(0.3))
+                    .frame(width: 5, height: 8)
+            }
+        }
+    }
+
+    private func barColor(for percent: Double) -> Color {
+        if percent < 50 { return .green }
+        if percent < 80 { return .yellow }
+        return .red
+    }
+
+    private func temperatureColor(_ celsius: Double) -> Color {
+        if celsius < 50 { return .green }
+        if celsius < 80 { return .yellow }
+        return .red
+    }
+
+    private func memoryPressureColor(_ pressure: MemoryPressure) -> Color {
+        switch pressure {
+        case .nominal: return .green
+        case .warning: return .yellow
+        case .critical: return .red
+        }
+    }
 }
 
 #Preview {
@@ -279,9 +465,11 @@ struct MenuBarView: View {
         helperManager: helperManager,
         proManager: proManager
     )
+    let hardwareMonitor = HardwareMonitor(helperManager: helperManager)
 
     MenuBarView()
         .environmentObject(monitor)
         .environmentObject(controller)
         .environmentObject(proManager)
+        .environmentObject(hardwareMonitor)
 }

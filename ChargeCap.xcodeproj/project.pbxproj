@@ -21,6 +21,8 @@
 		CC0000000000000000000027 /* ChargeControlModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000036 /* ChargeControlModels.swift */; };
 		CC0000000000000000000028 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000037 /* AppSettings.swift */; };
 		CC0000000000000000000029 /* ProManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000038 /* ProManager.swift */; };
+		CC000000000000000000010A /* HardwareModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000039 /* HardwareModels.swift */; };
+		CC000000000000000000010B /* HardwareMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000003A /* HardwareMonitor.swift */; };
 		CC0000000000000000000101 /* PrivilegedHelperManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000111 /* PrivilegedHelperManager.swift */; };
 		CC0000000000000000000102 /* ChargeCapHelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000113 /* ChargeCapHelperProtocol.swift */; };
 		CC0000000000000000000103 /* ChargeCapHelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000113 /* ChargeCapHelperProtocol.swift */; };
@@ -61,6 +63,8 @@
 		CC0000000000000000000036 /* ChargeControlModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChargeControlModels.swift; sourceTree = "<group>"; };
 		CC0000000000000000000037 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		CC0000000000000000000038 /* ProManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProManager.swift; sourceTree = "<group>"; };
+		CC0000000000000000000039 /* HardwareModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardwareModels.swift; sourceTree = "<group>"; };
+		CC000000000000000000003A /* HardwareMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardwareMonitor.swift; sourceTree = "<group>"; };
 		CC0000000000000000000111 /* PrivilegedHelperManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivilegedHelperManager.swift; sourceTree = "<group>"; };
 		CC0000000000000000000112 /* ChargeCapHelper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ChargeCapHelper; sourceTree = BUILT_PRODUCTS_DIR; };
 		CC0000000000000000000113 /* ChargeCapHelperProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChargeCapHelperProtocol.swift; sourceTree = "<group>"; };
@@ -134,6 +138,7 @@
 			children = (
 				CC000000000000000000002B /* BatteryState.swift */,
 				CC0000000000000000000036 /* ChargeControlModels.swift */,
+				CC0000000000000000000039 /* HardwareModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -153,6 +158,7 @@
 				CC0000000000000000000037 /* AppSettings.swift */,
 				CC000000000000000000002E /* BatteryMonitor.swift */,
 				CC000000000000000000002F /* ChargeController.swift */,
+				CC000000000000000000003A /* HardwareMonitor.swift */,
 				CC0000000000000000000111 /* PrivilegedHelperManager.swift */,
 				CC0000000000000000000038 /* ProManager.swift */,
 			);
@@ -336,11 +342,13 @@
 				CC000000000000000000001A /* ChargeCapApp.swift in Sources */,
 				CC000000000000000000001B /* BatteryState.swift in Sources */,
 				CC0000000000000000000027 /* ChargeControlModels.swift in Sources */,
+				CC000000000000000000010A /* HardwareModels.swift in Sources */,
 				CC000000000000000000001C /* MenuBarView.swift in Sources */,
 				CC000000000000000000001D /* SettingsView.swift in Sources */,
 				CC0000000000000000000028 /* AppSettings.swift in Sources */,
 				CC000000000000000000001E /* BatteryMonitor.swift in Sources */,
 				CC000000000000000000001F /* ChargeController.swift in Sources */,
+				CC000000000000000000010B /* HardwareMonitor.swift in Sources */,
 				CC0000000000000000000101 /* PrivilegedHelperManager.swift in Sources */,
 				CC0000000000000000000029 /* ProManager.swift in Sources */,
 				CC0000000000000000000020 /* Constants.swift in Sources */,

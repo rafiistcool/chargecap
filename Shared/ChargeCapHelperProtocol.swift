@@ -1,7 +1,7 @@
 import Foundation
 
 enum ChargeCapHelperConfiguration {
-    static let version = "4"
+    static let version = "5"
     static let helperIdentifier = "com.chargecap.Helper"
     static let machServiceName = "com.chargecap.Helper.mach"
 }
@@ -14,5 +14,6 @@ protocol ChargeCapHelperProtocol {
     func readSMCByte(key: String, withReply reply: @escaping (UInt8, String?) -> Void)
     func readSMCUInt32(key: String, withReply reply: @escaping (UInt32, String?) -> Void)
     func readSMCTemperature(key: String, withReply reply: @escaping (Double, String?) -> Void)
+    func readSMCFloat(key: String, withReply reply: @escaping (Float, String?) -> Void)
     func resetModifiedKeys(withReply reply: @escaping () -> Void)
 }

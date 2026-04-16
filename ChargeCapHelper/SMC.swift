@@ -25,6 +25,13 @@ extension Double {
     }
 }
 
+extension Float {
+    init(fromSMCBytes bytes: (UInt8, UInt8, UInt8, UInt8)) {
+        let raw = UInt32(fromBytes: bytes)
+        self = Float(bitPattern: raw)
+    }
+}
+
 extension FourCharCode {
     init(fromString str: String) {
         precondition(str.count == 4)
@@ -95,6 +102,8 @@ enum DataTypes {
     static let UInt8 = DataType(type: FourCharCode(fromString: "ui8 "), size: 1)
     static let UInt32 = DataType(type: FourCharCode(fromString: "ui32"), size: 4)
     static let SP78 = DataType(type: FourCharCode(fromString: "sp78"), size: 2)
+    static let FLT = DataType(type: FourCharCode(fromString: "flt "), size: 4)
+    static let FPE2 = DataType(type: FourCharCode(fromString: "fpe2"), size: 2)
 }
 
 struct SMCKey {

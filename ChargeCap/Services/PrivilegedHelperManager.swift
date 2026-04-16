@@ -92,6 +92,54 @@ final class PrivilegedHelperManager: ObservableObject {
         try await readSMCTemperature(key: "TB0T")
     }
 
+    func readSMCFloatValue(key: String) async throws -> Float {
+        guard let helper = helperProxy else {
+            throw HelperError.connectionUnavailable
+        }
+
+        return try await withCheckedThrowingContinuation { raw in
+            let continuation = SafeContinuation(raw)
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
+                continuation.resume(throwing: HelperError.connectionUnavailable)
+            }
+
+            helper.readSMCFloat(key: key) { value, errorDescription in
+                if let errorDescription {
+                    continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
+                } else {
+                    continuation.resume(returning: value)
+                }
+            }
+        }
+    }
+
+    func readSMCTemperatureValue(key: String) async throws -> Double {
+        try await readSMCTemperature(key: key)
+    }
+
+    func readSMCByteValue(key: String) async throws -> UInt8 {
+        guard let helper = helperProxy else {
+            throw HelperError.connectionUnavailable
+        }
+
+        return try await withCheckedThrowingContinuation { raw in
+            let continuation = SafeContinuation(raw)
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
+                continuation.resume(throwing: HelperError.connectionUnavailable)
+            }
+
+            helper.readSMCByte(key: key) { value, errorDescription in
+                if let errorDescription {
+                    continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
+                } else {
+                    continuation.resume(returning: value)
+                }
+            }
+        }
+    }
+
     func resetModifiedKeys() async {
         guard let helper = helperProxy else { return }
 

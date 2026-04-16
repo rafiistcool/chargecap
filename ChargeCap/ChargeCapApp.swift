@@ -28,6 +28,7 @@ struct ChargeCapApp: App {
     @StateObject private var helperManager = PrivilegedHelperManager()
     @StateObject private var proManager = ProManager()
     @StateObject private var chargeController: ChargeController
+    @StateObject private var hardwareMonitor: HardwareMonitor
 
     init() {
         let monitor = BatteryMonitor()
@@ -47,6 +48,9 @@ struct ChargeCapApp: App {
                 proManager: proManager
             )
         )
+        _hardwareMonitor = StateObject(
+            wrappedValue: HardwareMonitor(helperManager: helperManager)
+        )
 
         appDelegate.helperManager = helperManager
     }
@@ -57,6 +61,7 @@ struct ChargeCapApp: App {
                 .environmentObject(batteryMonitor)
                 .environmentObject(chargeController)
                 .environmentObject(proManager)
+                .environmentObject(hardwareMonitor)
         } label: {
             HStack(spacing: 2) {
                 let state = batteryMonitor.batteryState
