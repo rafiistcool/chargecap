@@ -9,6 +9,7 @@ struct SettingsView: View {
     @EnvironmentObject private var proManager: ProManager
 
     @State private var isLaunchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+    @State private var launchAtLoginError: String?
 
     var body: some View {
         Form {
@@ -275,16 +276,43 @@ struct SettingsView: View {
                             try SMAppService.mainApp.unregister()
                         }
                         isLaunchAtLoginEnabled = newValue
+                        launchAtLoginError = nil
                     } catch {
                         isLaunchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+                        launchAtLoginError = error.localizedDescription
                     }
                 }
             ))
+
+            if let launchAtLoginError {
+                Text(launchAtLoginError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
 
             Toggle("Show % in menu bar icon", isOn: Binding(
                 get: { settings.showPercentInMenuBar },
                 set: { settings.showPercentInMenuBar = $0 }
             ))
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Refresh interval")
+                    Spacer()
+                    Text("\(settings.refreshIntervalSeconds)s")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+
+                Slider(
+                    value: Binding(
+                        get: { Double(settings.refreshIntervalSeconds) },
+                        set: { settings.refreshIntervalSeconds = Int($0.rounded()) }
+                    ),
+                    in: Constants.minRefreshInterval...Constants.maxRefreshInterval,
+                    step: 1
+                )
+            }
 
             statusRow(
                 title: "Helper",

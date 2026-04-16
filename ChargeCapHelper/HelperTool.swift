@@ -1,10 +1,14 @@
 import Foundation
-import IOKit
 
 final class HelperTool: NSObject, ChargeCapHelperProtocol {
     static let shared = HelperTool()
 
-    private var modifiedKeys: [String: UInt8] = [:]
+    private enum ModifiedValue {
+        case uint8(UInt8)
+        case uint32(UInt32)
+    }
+
+    private var modifiedKeys: [String: ModifiedValue] = [:]
 
     func getVersion(withReply reply: @escaping (String) -> Void) {
         reply(ChargeCapHelperConfiguration.version)
@@ -20,19 +24,19 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
 
             if hasCHTE {
                 // Apple Silicon ("Tahoe"): CHTE is UInt32
+                try captureOriginalUInt32Value(for: "CHTE")
                 let key = SMCKit.getKey("CHTE", type: DataTypes.UInt32)
-                let val: UInt8 = enabled ? 0x00 : 0x01
-                let bytes: SMCBytes = (
-                    val, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0
-                )
-                try SMCKit.writeData(key, data: bytes)
+                let value: UInt32 = enabled ? 0x00000000 : 0x01000000
+                try SMCKit.writeData(key, data: smcBytes(from: value))
             } else if hasCHWA {
                 // Apple Silicon alt (bclm approach): CHWA is UInt8, 1=limit to 80%, 0=allow 100%
+                guard enabled else {
+                    reply(false, "CHWA only supports Apple's 80% charge limit and cannot disable charging")
+                    return
+                }
+                try captureOriginalByteValue(for: "CHWA")
                 let key = SMCKit.getKey("CHWA", type: DataTypes.UInt8)
-                let val: UInt8 = enabled ? 0x00 : 0x01
+                let val: UInt8 = 0x00
                 let bytes: SMCBytes = (
                     val, 0, 0, 0, 0, 0, 0, 0,
                     0, 0, 0, 0, 0, 0, 0, 0,
@@ -42,6 +46,8 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
                 try SMCKit.writeData(key, data: bytes)
             } else if hasCH0B {
                 // Intel: CH0B + CH0C are UInt8
+                try captureOriginalByteValue(for: "CH0B")
+                try captureOriginalByteValue(for: "CH0C")
                 let val: UInt8 = enabled ? 0x00 : 0x02
                 let keyB = SMCKit.getKey("CH0B", type: DataTypes.UInt8)
                 let bytes: SMCBytes = (
@@ -82,7 +88,7 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
 
             if modifiedKeys[key] == nil {
                 let currentValue = try SMCKit.readData(smcKey).0
-                modifiedKeys[key] = currentValue
+                modifiedKeys[key] = .uint8(currentValue)
             }
 
             try SMCKit.writeData(smcKey, data: bytes)
@@ -125,7 +131,12 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
 
     func resetModifiedKeys(withReply reply: @escaping () -> Void) {
         for (key, value) in modifiedKeys {
-            _ = try? writeSMCByteSync(key: key, value: value)
+            switch value {
+            case .uint8(let byte):
+                _ = try? writeSMCByteSync(key: key, value: byte)
+            case .uint32(let uint32):
+                _ = try? writeSMCUInt32Sync(key: key, value: uint32)
+            }
         }
 
         modifiedKeys.removeAll()
@@ -158,6 +169,54 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
             0, 0, 0, 0, 0, 0, 0, 0
         )
         try SMCKit.writeData(smcKey, data: bytes)
+    }
+
+    private func readSMCUInt32Sync(key: String) throws -> UInt32 {
+        guard key.utf8.count == 4 else {
+            throw SMCKit.SMCError.keyNotFound(key)
+        }
+
+        try SMCKit.open()
+
+        let smcKey = SMCKit.getKey(key, type: DataTypes.UInt32)
+        let data = try SMCKit.readData(smcKey)
+        return UInt32(fromBytes: (data.0, data.1, data.2, data.3))
+    }
+
+    private func writeSMCUInt32Sync(key: String, value: UInt32) throws {
+        guard key.utf8.count == 4 else {
+            throw SMCKit.SMCError.keyNotFound(key)
+        }
+
+        try SMCKit.open()
+
+        let smcKey = SMCKit.getKey(key, type: DataTypes.UInt32)
+        try SMCKit.writeData(smcKey, data: smcBytes(from: value))
+    }
+
+    private func captureOriginalByteValue(for key: String) throws {
+        guard modifiedKeys[key] == nil else { return }
+        let currentValue = try readSMCByteSync(key: key)
+        modifiedKeys[key] = .uint8(currentValue)
+    }
+
+    private func captureOriginalUInt32Value(for key: String) throws {
+        guard modifiedKeys[key] == nil else { return }
+        let currentValue = try readSMCUInt32Sync(key: key)
+        modifiedKeys[key] = .uint32(currentValue)
+    }
+
+    private func smcBytes(from value: UInt32) -> SMCBytes {
+        let byte0 = UInt8((value >> 24) & 0xFF)
+        let byte1 = UInt8((value >> 16) & 0xFF)
+        let byte2 = UInt8((value >> 8) & 0xFF)
+        let byte3 = UInt8(value & 0xFF)
+        return (
+            byte0, byte1, byte2, byte3, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0
+        )
     }
 
     private func smcKeyExists(_ keyName: String) -> Bool {

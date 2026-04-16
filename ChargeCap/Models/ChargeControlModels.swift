@@ -8,7 +8,8 @@ enum ChargeCommand: String, Equatable {
 
 enum FanControlMode: String, Codable, CaseIterable {
     case auto = "Auto"
-    case manual = "Manual"
+    case performance = "Performance"
+    case quiet = "Quiet"
 }
 
 enum ChargeLimitStatus: Equatable {

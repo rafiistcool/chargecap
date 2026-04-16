@@ -103,6 +103,18 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(showPercentInMenuBar, forKey: Keys.showPercentInMenuBar) }
     }
 
+    @Published var refreshIntervalSeconds: Int {
+        didSet {
+            let clamped = Self.clampRefreshInterval(refreshIntervalSeconds)
+            if refreshIntervalSeconds != clamped {
+                refreshIntervalSeconds = clamped
+                return
+            }
+
+            defaults.set(refreshIntervalSeconds, forKey: Keys.refreshIntervalSeconds)
+        }
+    }
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -147,6 +159,10 @@ final class AppSettings: ObservableObject {
         notifyOnHealthDrop = defaults.object(forKey: Keys.notifyOnHealthDrop) as? Bool ?? true
         notifyOnTemperatureAlert = defaults.object(forKey: Keys.notifyOnTemperatureAlert) as? Bool ?? false
         showPercentInMenuBar = defaults.object(forKey: Keys.showPercentInMenuBar) as? Bool ?? true
+
+        let storedRefreshInterval = defaults.object(forKey: Keys.refreshIntervalSeconds) as? Int ??
+            Int(Constants.defaultRefreshInterval)
+        refreshIntervalSeconds = Self.clampRefreshInterval(storedRefreshInterval)
     }
 
     private enum Keys {
@@ -164,6 +180,7 @@ final class AppSettings: ObservableObject {
         static let notifyOnHealthDrop = "notifyOnHealthDrop"
         static let notifyOnTemperatureAlert = "notifyOnTemperatureAlert"
         static let showPercentInMenuBar = "showPercentInMenuBar"
+        static let refreshIntervalSeconds = "refreshIntervalSeconds"
     }
 
     private static func clampLimit(_ value: Int) -> Int {
@@ -191,5 +208,9 @@ final class AppSettings: ObservableObject {
             minute: min(59, max(0, schedule.minute)),
             isEnabled: schedule.isEnabled
         )
+    }
+
+    private static func clampRefreshInterval(_ value: Int) -> Int {
+        min(Int(Constants.maxRefreshInterval), max(Int(Constants.minRefreshInterval), value))
     }
 }

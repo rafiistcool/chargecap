@@ -188,7 +188,7 @@ struct MenuBarView: View {
     private var settingsRow: some View {
         HStack(spacing: 12) {
             Button {
-                NSApp.activate()
+                NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: "settings")
             } label: {
                 Label("Settings", systemImage: "gear")

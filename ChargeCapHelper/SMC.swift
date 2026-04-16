@@ -197,6 +197,13 @@ enum SMCKit {
     private static func callDriver(_ input: inout SMCParamStruct) throws -> SMCParamStruct {
         precondition(MemoryLayout<SMCParamStruct>.stride == 80, "SMCParamStruct must be 80 bytes")
 
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard connection != 0 else {
+            throw SMCError.driverNotFound
+        }
+
         var output = SMCParamStruct()
         let inputSize = MemoryLayout<SMCParamStruct>.stride
         var outputSize = MemoryLayout<SMCParamStruct>.stride

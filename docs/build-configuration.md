@@ -16,7 +16,7 @@ chargecap/
 │   │   └── ChargeControlModels.swift  # Enums: state, command, fan mode
 │   ├── Services/
 │   │   ├── AppSettings.swift     # UserDefaults-backed settings
-│   │   ├── BatteryMonitor.swift  # IOKit battery reading (30s timer)
+│   │   ├── BatteryMonitor.swift  # IOKit battery reading (default 15s timer, configurable)
 │   │   ├── ChargeController.swift # Charge limiting state machine
 │   │   ├── PrivilegedHelperManager.swift  # XPC client + SafeContinuation
 │   │   └── ProManager.swift      # StoreKit 2 in-app purchases
@@ -45,7 +45,7 @@ chargecap/
 | Platform | macOS 26+ |
 | UI Framework | SwiftUI |
 | Type | Menu bar app (`MenuBarExtra`) |
-| Development Team | `XGCYZ8NBU4` |
+| Development Team | Set in local signing configuration |
 
 **Linked Frameworks:**
 - `IOKit.framework` — Battery monitoring via IOPowerSources and IORegistry
@@ -60,7 +60,7 @@ chargecap/
 | Platform | macOS |
 | Type | Command-line tool (launchd daemon) |
 | Runs as | root |
-| Development Team | `XGCYZ8NBU4` |
+| Development Team | Set in local signing configuration |
 
 **Linked Frameworks:**
 - `IOKit.framework` — SMC driver communication
@@ -93,7 +93,7 @@ chargecap/
 | Setting | Value |
 |---------|-------|
 | `SWIFT_VERSION` | 5.0 (Swift 6 language mode awareness) |
-| `DEVELOPMENT_TEAM` | `XGCYZ8NBU4` |
+| `DEVELOPMENT_TEAM` | Set per-developer in local signing config |
 | `CODE_SIGN_STYLE` | Automatic |
 
 ### App Target Specific
@@ -112,7 +112,7 @@ chargecap/
 
 ## Code Signing
 
-Both the app and helper must be signed by the same development team (`XGCYZ8NBU4`). The helper binary is code-signed on copy (CopyFiles build phase has `CodeSignOnCopy` enabled).
+Both the app and helper must be signed by the same development team. The helper binary is code-signed on copy (CopyFiles build phase has `CodeSignOnCopy` enabled).
 
 For distribution, both targets need proper signing with a Developer ID certificate. The helper needs to run as root via launchd, so proper code signing is essential for `SMAppService.daemon()` to accept the registration.
 

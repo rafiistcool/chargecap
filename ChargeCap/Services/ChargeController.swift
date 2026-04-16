@@ -32,6 +32,7 @@ final class ChargeController: ObservableObject {
         self.calendar = calendar
         self.state = Self.makeInitialState(settings: settings)
 
+        monitor.updateRefreshInterval(seconds: settings.refreshIntervalSeconds)
         bind()
 
         Task {
@@ -125,12 +126,14 @@ final class ChargeController: ObservableObject {
             settings.$isHeatProtectionEnabled.map { _ in () }.eraseToAnyPublisher(),
             settings.$warmTemperatureThreshold.map { _ in () }.eraseToAnyPublisher(),
             settings.$hotTemperatureThreshold.map { _ in () }.eraseToAnyPublisher(),
-            settings.$chargeSchedule.map { _ in () }.eraseToAnyPublisher()
+            settings.$chargeSchedule.map { _ in () }.eraseToAnyPublisher(),
+            settings.$refreshIntervalSeconds.map { _ in () }.eraseToAnyPublisher()
         )
             .receive(on: RunLoop.main)
             .sink { [weak self] (_: Void) in
                 guard let self else { return }
                 self.state = Self.state(from: self.state, settings: self.settings)
+                self.monitor.updateRefreshInterval(seconds: self.settings.refreshIntervalSeconds)
                 self.evaluate(using: self.monitor.batteryState)
             }
             .store(in: &cancellables)
@@ -316,7 +319,7 @@ final class ChargeController: ObservableObject {
 
     private var shouldRefreshTelemetry: Bool {
         guard let lastTelemetryRefresh else { return true }
-        return Date.now.timeIntervalSince(lastTelemetryRefresh) >= Constants.refreshInterval
+        return Date.now.timeIntervalSince(lastTelemetryRefresh) >= TimeInterval(settings.refreshIntervalSeconds)
     }
 
     private static func makeInitialState(settings: AppSettings) -> ChargeControlState {

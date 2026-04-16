@@ -77,7 +77,7 @@ struct ChargeCapApp: App {
                 .environmentObject(proManager)
                 .environmentObject(chargeController)
                 .onAppear {
-                    NSApp.activate()
+                    NSApp.activate(ignoringOtherApps: true)
                 }
         }
         .windowResizability(.contentSize)

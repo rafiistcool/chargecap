@@ -3,7 +3,7 @@ import Foundation
 import IOKit
 import IOKit.ps
 
-/// Reads battery information from IOKit and the IORegistry, refreshing every 30 seconds.
+/// Reads battery information from IOKit and the IORegistry using a configurable refresh interval.
 final class BatteryMonitor: ObservableObject {
     @Published private(set) var batteryState: BatteryState
 
@@ -16,6 +16,7 @@ final class BatteryMonitor: ObservableObject {
     @Published private(set) var activeChargeLimit: Int?
 
     private var timer: AnyCancellable?
+    private var refreshInterval: TimeInterval = Constants.defaultRefreshInterval
     private static let percentageRange = 1...100
     private static let maxReasonableCapacityMultiplier = 2
 
@@ -26,9 +27,17 @@ final class BatteryMonitor: ObservableObject {
     }
 
     private func startTimer() {
-        timer = Timer.publish(every: Constants.refreshInterval, on: .main, in: .common)
+        timer = Timer.publish(every: refreshInterval, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in self?.refresh() }
+    }
+
+    func updateRefreshInterval(seconds: Int) {
+        let clampedInterval = min(Constants.maxRefreshInterval, max(Constants.minRefreshInterval, TimeInterval(seconds)))
+        guard refreshInterval != clampedInterval else { return }
+        refreshInterval = clampedInterval
+        timer?.cancel()
+        startTimer()
     }
 
     /// Refresh battery state from the system on a background thread.

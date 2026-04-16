@@ -85,7 +85,7 @@ The settings window uses `Window(id: "settings")` instead of the `Settings` scen
 
 ### 3. Monitoring Layer — BatteryMonitor
 
-Reads battery telemetry every 30 seconds from two IOKit sources:
+Reads battery telemetry on a configurable interval (`Constants.minRefreshInterval...Constants.maxRefreshInterval`, default 15 seconds) from two IOKit sources:
 
 **IOPSCopyPowerSourcesInfo (Power Sources API):**
 - Current charge percentage
@@ -157,7 +157,7 @@ Pro-gated features show a lock icon and are disabled in the UI until unlocked. S
 
 On launch:
 1. `ChargeCapApp` creates all service instances
-2. `BatteryMonitor` starts 30-second refresh timer
+2. `BatteryMonitor` starts a refresh timer using user settings (default 15 seconds)
 3. `PrivilegedHelperManager` checks helper installation status
 4. `ChargeController` begins evaluation cycle
 5. `MenuBarExtra` appears in the menu bar
