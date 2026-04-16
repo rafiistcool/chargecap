@@ -147,7 +147,7 @@ final class AppSettings: ObservableObject {
         isHeatProtectionEnabled = defaults.object(forKey: Keys.isHeatProtectionEnabled) as? Bool ?? false
 
         if let modeRaw = defaults.string(forKey: Keys.fanControlMode),
-           let mode = FanControlMode(rawValue: modeRaw)
+           let mode = FanControlMode(storedValue: modeRaw)
         {
             fanControlMode = mode
         } else {

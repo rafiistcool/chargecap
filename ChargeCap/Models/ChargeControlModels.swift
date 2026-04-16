@@ -10,6 +10,19 @@ enum FanControlMode: String, Codable, CaseIterable {
     case auto = "Auto"
     case performance = "Performance"
     case quiet = "Quiet"
+
+    init?(storedValue: String) {
+        switch storedValue {
+        case FanControlMode.auto.rawValue:
+            self = .auto
+        case FanControlMode.performance.rawValue, "Manual":
+            self = .performance
+        case FanControlMode.quiet.rawValue:
+            self = .quiet
+        default:
+            return nil
+        }
+    }
 }
 
 enum ChargeLimitStatus: Equatable {
