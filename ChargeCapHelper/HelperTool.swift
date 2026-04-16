@@ -135,6 +135,35 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
         }
     }
 
+    func readSMCFloat(key: String, withReply reply: @escaping (Float, String?) -> Void) {
+        guard key.utf8.count == 4 else {
+            reply(0, "Invalid SMC key '\(key)': must be exactly 4 characters")
+            return
+        }
+
+        do {
+            try SMCKit.open()
+
+            // Try flt first (Apple Silicon), fall back to fpe2 (Intel)
+            let smcKey = SMCKit.getKey(key, type: DataTypes.FLT)
+            let data = try SMCKit.readData(smcKey)
+            let value = Float(fromSMCBytes: (data.0, data.1, data.2, data.3))
+            reply(value, nil)
+        } catch {
+            // Fallback: try fpe2 encoding (unsigned 14.2 fixed-point)
+            do {
+                try SMCKit.open()
+                let smcKey = SMCKit.getKey(key, type: DataTypes.FPE2)
+                let data = try SMCKit.readData(smcKey)
+                let raw = (UInt16(data.0) << 8) | UInt16(data.1)
+                let value = Float(raw) / 4.0
+                reply(value, nil)
+            } catch {
+                reply(0, error.localizedDescription)
+            }
+        }
+    }
+
     func resetModifiedKeys(withReply reply: @escaping () -> Void) {
         for (key, value) in modifiedKeys {
             switch value {
