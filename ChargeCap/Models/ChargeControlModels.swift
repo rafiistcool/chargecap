@@ -11,8 +11,8 @@ enum FanControlMode: String, Codable, CaseIterable {
     case performance = "Performance"
     case quiet = "Quiet"
 
-    init?(storedValue: String) {
-        switch storedValue {
+    init?(fromStoredString storedString: String) {
+        switch storedString {
         case FanControlMode.auto.rawValue:
             self = .auto
         case FanControlMode.performance.rawValue, "Manual":

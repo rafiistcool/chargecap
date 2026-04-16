@@ -32,7 +32,7 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
                 // CHWA is Apple's 80% optimization toggle (1=optimize, 0=allow full charging).
                 // It does not provide an immediate "disable charging now" capability.
                 guard enabled else {
-                    reply(false, "CHWA cannot immediately inhibit charging; use CHTE/CH0B-capable hardware")
+                    reply(false, "This hardware supports only Apple's optimized charging behavior, not immediate charge inhibit")
                     return
                 }
                 try writeSMCByteWithTracking(key: "CHWA", value: 0x00)
