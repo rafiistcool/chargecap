@@ -26,10 +26,12 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
                 // Apple Silicon ("Tahoe"): CHTE is UInt32
                 try captureOriginalUInt32Value(for: "CHTE")
                 let key = SMCKit.getKey("CHTE", type: DataTypes.UInt32)
+                // CHTE uses the first payload byte (0x01,0x00,0x00,0x00) to inhibit charging.
                 let value: UInt32 = enabled ? 0x00000000 : 0x01000000
                 try SMCKit.writeData(key, data: smcBytes(from: value))
             } else if hasCHWA {
-                // Apple Silicon alt (bclm approach): CHWA is UInt8, 1=limit to 80%, 0=allow 100%
+                // CHWA is Apple's 80% optimization toggle (1=optimize, 0=allow full charging).
+                // It does not provide an immediate "disable charging now" capability.
                 guard enabled else {
                     reply(false, "CHWA only supports Apple's 80% charge limit and cannot disable charging")
                     return
@@ -207,6 +209,7 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
     }
 
     private func smcBytes(from value: UInt32) -> SMCBytes {
+        // SMCKit UInt32 values are written in big-endian byte order.
         let byte0 = UInt8((value >> 24) & 0xFF)
         let byte1 = UInt8((value >> 16) & 0xFF)
         let byte2 = UInt8((value >> 8) & 0xFF)
