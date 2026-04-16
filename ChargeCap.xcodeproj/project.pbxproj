@@ -40,6 +40,7 @@
 		CC0000000000000000000317 /* HardwareMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000307 /* HardwareMonitorTests.swift */; };
 		CC0000000000000000000318 /* PrivilegedHelperManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000308 /* PrivilegedHelperManagerTests.swift */; };
 		CC0000000000000000000319 /* ProManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000309 /* ProManagerTests.swift */; };
+		CC000000000000000000031A /* ChargeCap.app in Frameworks */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000022 /* ChargeCap.app */; };
 		FDF8B4AC2F8FF964008B977E /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000033 /* IOKit.framework */; };
 /* End PBXBuildFile section */
 
@@ -129,6 +130,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CC000000000000000000031A /* ChargeCap.app in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
