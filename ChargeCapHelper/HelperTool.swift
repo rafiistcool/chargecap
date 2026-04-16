@@ -186,19 +186,17 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
     }
 
     private func writeSMCByteWithTracking(key: String, value: UInt8) throws {
-        let originalValue = modifiedKeys[key] ?? .uint8(try readSMCByteSync(key: key))
-        try writeSMCByteSync(key: key, value: value)
         if modifiedKeys[key] == nil {
-            modifiedKeys[key] = originalValue
+            modifiedKeys[key] = .uint8(try readSMCByteSync(key: key))
         }
+        try writeSMCByteSync(key: key, value: value)
     }
 
     private func writeSMCUInt32WithTracking(key: String, value: UInt32) throws {
-        let originalValue = modifiedKeys[key] ?? .uint32(try readSMCUInt32Sync(key: key))
-        try writeSMCUInt32Sync(key: key, value: value)
         if modifiedKeys[key] == nil {
-            modifiedKeys[key] = originalValue
+            modifiedKeys[key] = .uint32(try readSMCUInt32Sync(key: key))
         }
+        try writeSMCUInt32Sync(key: key, value: value)
     }
 
     private func smcBytes(from value: UInt32) -> SMCBytes {
