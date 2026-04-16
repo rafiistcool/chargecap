@@ -89,11 +89,7 @@ final class PrivilegedHelperManager: ObservableObject {
     }
 
     func batteryTemperatureFromSMC() async throws -> Double {
-        let rawValue = try await readSMCUInt32(key: "TB0T")
-        let highByte = UInt8((rawValue >> 24) & 0xFF)
-        let lowByte = UInt8((rawValue >> 16) & 0xFF)
-        let sign = highByte & 0x80 == 0 ? 1.0 : -1.0
-        return sign * (Double(highByte & 0x7F) + Double(lowByte) / 256.0)
+        try await readSMCTemperature(key: "TB0T")
     }
 
     func resetModifiedKeys() async {
@@ -257,6 +253,28 @@ final class PrivilegedHelperManager: ObservableObject {
             }
 
             helper.readSMCUInt32(key: key) { value, errorDescription in
+                if let errorDescription {
+                    continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
+                } else {
+                    continuation.resume(returning: value)
+                }
+            }
+        }
+    }
+
+    private func readSMCTemperature(key: String) async throws -> Double {
+        guard let helper = helperProxy else {
+            throw HelperError.connectionUnavailable
+        }
+
+        return try await withCheckedThrowingContinuation { raw in
+            let continuation = SafeContinuation(raw)
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
+                continuation.resume(throwing: HelperError.connectionUnavailable)
+            }
+
+            helper.readSMCTemperature(key: key) { value, errorDescription in
                 if let errorDescription {
                     continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
                 } else {

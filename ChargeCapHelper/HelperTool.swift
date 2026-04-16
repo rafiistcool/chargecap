@@ -116,6 +116,25 @@ final class HelperTool: NSObject, ChargeCapHelperProtocol {
         }
     }
 
+    func readSMCTemperature(key: String, withReply reply: @escaping (Double, String?) -> Void) {
+        guard key.utf8.count == 4 else {
+            reply(0, "Invalid SMC key '\(key)': must be exactly 4 characters")
+            return
+        }
+
+        do {
+            try SMCKit.open()
+
+            // Temperature keys use sp78: signed 7.8 fixed-point, 2 bytes
+            let smcKey = SMCKit.getKey(key, type: DataTypes.SP78)
+            let data = try SMCKit.readData(smcKey)
+            let celsius = Double(fromSP78: (data.0, data.1))
+            reply(celsius, nil)
+        } catch {
+            reply(0, error.localizedDescription)
+        }
+    }
+
     func resetModifiedKeys(withReply reply: @escaping () -> Void) {
         for (key, value) in modifiedKeys {
             switch value {

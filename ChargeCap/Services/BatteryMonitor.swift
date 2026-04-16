@@ -164,9 +164,9 @@ final class BatteryMonitor: ObservableObject {
                 designCapacity = firstPositiveIntValueForKeys(in: dict, keys: ["DesignCapacity"]) ?? 0
                 maxCapacity    = resolveMaxCapacity(in: dict, designCapacity: designCapacity)
 
-                // Temperature is stored in centidegrees Celsius (e.g. 3800 → 38.00 °C)
+                // Temperature from AppleSmartBattery is in decikelvin (e.g. 2984 → 298.4K → 25.25°C)
                 let tempRaw = firstPositiveIntValueForKeys(in: dict, keys: ["Temperature"]) ?? 0
-                temperature = Double(tempRaw) / 100.0
+                temperature = Double(tempRaw) / 10.0 - 273.15
 
                 healthPercent = resolveHealthPercent(
                     in: dict,

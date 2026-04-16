@@ -94,6 +94,7 @@ struct DataType: Equatable {
 enum DataTypes {
     static let UInt8 = DataType(type: FourCharCode(fromString: "ui8 "), size: 1)
     static let UInt32 = DataType(type: FourCharCode(fromString: "ui32"), size: 4)
+    static let SP78 = DataType(type: FourCharCode(fromString: "sp78"), size: 2)
 }
 
 struct SMCKey {
