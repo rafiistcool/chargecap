@@ -89,6 +89,42 @@ final class HardwareModelsTests: XCTestCase {
         XCTAssertEqual(reading.id, "TC0C")
     }
 
+    // MARK: - SensorCategory
+
+    func testSensorReading_defaultCategoryIsOther() {
+        let reading = SensorReading(key: "TC0C", name: "CPU Die", value: 45.0, unit: .celsius)
+        XCTAssertEqual(reading.category, .other)
+    }
+
+    func testSensorReading_explicitCategory() {
+        let reading = SensorReading(
+            key: "Tp01",
+            name: "Performance Core 1",
+            value: 55.0,
+            unit: .celsius,
+            category: .performanceCores
+        )
+        XCTAssertEqual(reading.category, .performanceCores)
+    }
+
+    func testSensorCategory_sortOrderIsStable() {
+        let sorted = SensorCategory.allCases.sorted { $0.sortOrder < $1.sortOrder }
+        // Cores should come before GPU, which should come before battery, etc.
+        let efficiencyIdx = sorted.firstIndex(of: .efficiencyCores)!
+        let performanceIdx = sorted.firstIndex(of: .performanceCores)!
+        let gpuIdx = sorted.firstIndex(of: .gpu)!
+        let batteryIdx = sorted.firstIndex(of: .battery)!
+        XCTAssertLessThan(efficiencyIdx, performanceIdx)
+        XCTAssertLessThan(performanceIdx, gpuIdx)
+        XCTAssertLessThan(gpuIdx, batteryIdx)
+    }
+
+    func testSensorCategory_displayNamesMatchRawValues() {
+        XCTAssertEqual(SensorCategory.performanceCores.rawValue, "Performance Cores")
+        XCTAssertEqual(SensorCategory.efficiencyCores.rawValue, "Efficiency Cores")
+        XCTAssertEqual(SensorCategory.battery.rawValue, "Battery")
+    }
+
     // MARK: - CPU Temperature (SMC sensor key)
 
     func testCPUTemperature_sensorReading() {

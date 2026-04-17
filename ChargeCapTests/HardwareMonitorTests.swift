@@ -91,7 +91,12 @@ final class HardwareMonitorTests: XCTestCase {
         XCTAssertTrue(keys.contains("TC0C"))
         XCTAssertTrue(keys.contains("GC0C"))
         XCTAssertTrue(keys.contains("TB0T"))
-        XCTAssertEqual(HardwareMonitor.temperatureKeys.count, 7)
+        // Apple Silicon core / cluster sensors were added alongside the
+        // detailed temperatures view; make sure the list keeps covering
+        // at least the basic Intel Mac sensors plus key Apple Silicon ones.
+        XCTAssertTrue(keys.contains("Tp01"), "Should include first Apple Silicon performance core")
+        XCTAssertTrue(keys.contains("Tg05"), "Should include first Apple Silicon GPU cluster")
+        XCTAssertGreaterThanOrEqual(HardwareMonitor.temperatureKeys.count, 30)
     }
 
     // MARK: - Refresh with helper not installed
@@ -220,6 +225,24 @@ final class HardwareMonitorTests: XCTestCase {
         let readings = await monitor.readTemperatures()
 
         XCTAssertEqual(readings.first?.name, "CPU Die")
+    }
+
+    func testReadTemperatures_setsCategoryFromKey() async {
+        mockReader.isInstalled = true
+        mockReader.temperatureValues = [
+            "Tp01": 50.0, // Performance core
+            "Tp09": 45.0, // Efficiency core
+            "Tg05": 55.0, // GPU cluster
+            "TB0T": 32.0, // Battery
+        ]
+
+        let readings = await monitor.readTemperatures()
+        let byKey = Dictionary(uniqueKeysWithValues: readings.map { ($0.key, $0) })
+
+        XCTAssertEqual(byKey["Tp01"]?.category, .performanceCores)
+        XCTAssertEqual(byKey["Tp09"]?.category, .efficiencyCores)
+        XCTAssertEqual(byKey["Tg05"]?.category, .gpu)
+        XCTAssertEqual(byKey["TB0T"]?.category, .battery)
     }
 
     func testReadTemperatures_boundaryValues() async {
@@ -440,5 +463,69 @@ final class HardwareMonitorTests: XCTestCase {
         mockReader.temperatureValues = ["TC0C": 65.0]
         await monitor.refresh()
         XCTAssertEqual(monitor.cpuTemperature, 65.0)
+    }
+
+    // MARK: - Representative temperatures (Apple Silicon fallbacks)
+
+    func testRepresentativeCPUTemperature_prefersIntelDie() {
+        let readings = [
+            SensorReading(key: "TC0C", name: "CPU Die", value: 60.0, unit: .celsius, category: .cpu),
+            SensorReading(key: "Tp01", name: "Performance Core 1", value: 85.0, unit: .celsius, category: .performanceCores),
+        ]
+        XCTAssertEqual(HardwareMonitor.representativeCPUTemperature(from: readings), 60.0)
+    }
+
+    func testRepresentativeCPUTemperature_fallsBackToHottestCore() {
+        let readings = [
+            SensorReading(key: "Tp01", name: "Performance Core 1", value: 55.0, unit: .celsius, category: .performanceCores),
+            SensorReading(key: "Tp05", name: "Performance Core 2", value: 72.0, unit: .celsius, category: .performanceCores),
+            SensorReading(key: "Tp09", name: "Efficiency Core 1", value: 48.0, unit: .celsius, category: .efficiencyCores),
+        ]
+        XCTAssertEqual(HardwareMonitor.representativeCPUTemperature(from: readings), 72.0)
+    }
+
+    func testRepresentativeCPUTemperature_noCPUReadings_returnsZero() {
+        let readings = [
+            SensorReading(key: "TB0T", name: "Battery", value: 30.0, unit: .celsius, category: .battery),
+        ]
+        XCTAssertEqual(HardwareMonitor.representativeCPUTemperature(from: readings), 0.0)
+    }
+
+    func testRepresentativeGPUTemperature_prefersIntelDie() {
+        let readings = [
+            SensorReading(key: "GC0C", name: "GPU", value: 50.0, unit: .celsius, category: .gpu),
+            SensorReading(key: "Tg05", name: "GPU Cluster 1", value: 80.0, unit: .celsius, category: .gpu),
+        ]
+        XCTAssertEqual(HardwareMonitor.representativeGPUTemperature(from: readings), 50.0)
+    }
+
+    func testRepresentativeGPUTemperature_fallsBackToHottestCluster() {
+        let readings = [
+            SensorReading(key: "Tg05", name: "GPU Cluster 1", value: 55.0, unit: .celsius, category: .gpu),
+            SensorReading(key: "Tg0D", name: "GPU Cluster 2", value: 68.0, unit: .celsius, category: .gpu),
+        ]
+        XCTAssertEqual(HardwareMonitor.representativeGPUTemperature(from: readings), 68.0)
+    }
+
+    func testRepresentativeGPUTemperature_noGPUReadings_returnsZero() {
+        let readings = [
+            SensorReading(key: "TC0C", name: "CPU Die", value: 50.0, unit: .celsius, category: .cpu),
+        ]
+        XCTAssertEqual(HardwareMonitor.representativeGPUTemperature(from: readings), 0.0)
+    }
+
+    func testRefresh_appleSilicon_populatesCPUFromPerformanceCores() async {
+        mockReader.isInstalled = true
+        mockReader.temperatureValues = [
+            // Simulate Apple Silicon: no TC0C/TC0P, but per-core sensors exist
+            "Tp01": 60.0,
+            "Tp05": 82.0,
+            "Tg05": 58.0,
+        ]
+
+        await monitor.refresh()
+
+        XCTAssertEqual(monitor.cpuTemperature, 82.0, "CPU temp should come from hottest performance core")
+        XCTAssertEqual(monitor.gpuTemperature, 58.0, "GPU temp should come from hottest GPU cluster")
     }
 }
