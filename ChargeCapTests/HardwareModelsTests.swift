@@ -119,6 +119,11 @@ final class HardwareModelsTests: XCTestCase {
         XCTAssertLessThan(gpuIdx, batteryIdx)
     }
 
+    func testSensorCategory_sortOrdersAreUnique() {
+        let orders = SensorCategory.allCases.map(\.sortOrder)
+        XCTAssertEqual(orders.count, Set(orders).count, "Every SensorCategory must have a unique sortOrder")
+    }
+
     func testSensorCategory_displayNamesMatchRawValues() {
         XCTAssertEqual(SensorCategory.performanceCores.rawValue, "Performance Cores")
         XCTAssertEqual(SensorCategory.efficiencyCores.rawValue, "Efficiency Cores")

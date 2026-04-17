@@ -89,7 +89,7 @@ enum SensorCategory: String, CaseIterable {
         case .storage:          return "internaldrive"
         case .airflow:          return "wind"
         case .chassis:          return "macbook"
-        case .power:            return "bolt.fill"
+        case .power:            return "powerplug.fill"
         case .proximity:        return "dot.radiowaves.left.and.right"
         case .other:            return "thermometer.medium"
         }
