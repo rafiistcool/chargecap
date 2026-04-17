@@ -74,6 +74,21 @@ struct ChargeCapApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        Window("ChargeCap", id: "mainWindow") {
+            MainWindowView()
+                .environmentObject(batteryMonitor)
+                .environmentObject(appSettings)
+                .environmentObject(helperManager)
+                .environmentObject(proManager)
+                .environmentObject(chargeController)
+                .environmentObject(hardwareMonitor)
+                .onAppear {
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+        }
+        .defaultSize(width: 900, height: 620)
+        .defaultLaunchBehavior(.suppressed)
+
         Window("ChargeCap Settings", id: "settings") {
             SettingsView()
                 .environmentObject(batteryMonitor)

@@ -11,6 +11,7 @@
 		CC000000000000000000001B /* BatteryState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000002B /* BatteryState.swift */; };
 		CC000000000000000000001C /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000002C /* MenuBarView.swift */; };
 		CC000000000000000000001D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000002D /* SettingsView.swift */; };
+		CC000000000000000000011D /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000012D /* MainWindowView.swift */; };
 		CC000000000000000000001E /* BatteryMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000002E /* BatteryMonitor.swift */; };
 		CC000000000000000000001F /* ChargeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000002F /* ChargeController.swift */; };
 		CC0000000000000000000020 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000030 /* Constants.swift */; };
@@ -73,6 +74,7 @@
 		CC000000000000000000002B /* BatteryState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryState.swift; sourceTree = "<group>"; };
 		CC000000000000000000002C /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		CC000000000000000000002D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		CC000000000000000000012D /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
 		CC000000000000000000002E /* BatteryMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryMonitor.swift; sourceTree = "<group>"; };
 		CC000000000000000000002F /* ChargeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChargeController.swift; sourceTree = "<group>"; };
 		CC0000000000000000000030 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
@@ -189,6 +191,7 @@
 			isa = PBXGroup;
 			children = (
 				CC000000000000000000002C /* MenuBarView.swift */,
+				CC000000000000000000012D /* MainWindowView.swift */,
 				CC000000000000000000002D /* SettingsView.swift */,
 			);
 			path = Views;
@@ -433,6 +436,7 @@
 				CC0000000000000000000027 /* ChargeControlModels.swift in Sources */,
 				CC000000000000000000010A /* HardwareModels.swift in Sources */,
 				CC000000000000000000001C /* MenuBarView.swift in Sources */,
+				CC000000000000000000011D /* MainWindowView.swift in Sources */,
 				CC000000000000000000001D /* SettingsView.swift in Sources */,
 				CC0000000000000000000028 /* AppSettings.swift in Sources */,
 				CC000000000000000000001E /* BatteryMonitor.swift in Sources */,
