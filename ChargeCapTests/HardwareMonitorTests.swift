@@ -465,6 +465,42 @@ final class HardwareMonitorTests: XCTestCase {
         XCTAssertEqual(monitor.cpuTemperature, 65.0)
     }
 
+    // MARK: - Readable-key caching
+
+    func testReadTemperatures_cachesReadableKeysAfterFirstProbe() async {
+        mockReader.isInstalled = true
+        // Only TC0C returns a valid reading on the first probe.
+        mockReader.temperatureValues = ["TC0C": 55.0]
+        let first = await monitor.readTemperatures()
+        XCTAssertEqual(first.map(\.key), ["TC0C"])
+
+        // Add a new sensor *after* the probe. Because only previously
+        // readable keys are polled now, the new sensor should be ignored
+        // until the cache is reset (helper reinstall).
+        mockReader.temperatureValues = ["TC0C": 55.0, "GC0C": 60.0]
+        let second = await monitor.readTemperatures()
+        XCTAssertEqual(second.map(\.key), ["TC0C"])
+    }
+
+    func testRefresh_helperReinstallAfterUninstall_reprobesSensors() async {
+        mockReader.isInstalled = true
+        mockReader.temperatureValues = ["TC0C": 55.0]
+        await monitor.refresh()
+        XCTAssertEqual(monitor.sensors.map(\.key), ["TC0C"])
+
+        // Helper goes away: sensors cleared and cache invalidated.
+        mockReader.isInstalled = false
+        await monitor.refresh()
+        XCTAssertTrue(monitor.sensors.isEmpty)
+
+        // Helper comes back with a different set of sensors: the monitor
+        // should re-probe and pick up the new key.
+        mockReader.isInstalled = true
+        mockReader.temperatureValues = ["GC0C": 62.0]
+        await monitor.refresh()
+        XCTAssertEqual(monitor.sensors.map(\.key), ["GC0C"])
+    }
+
     // MARK: - Representative temperatures (Apple Silicon fallbacks)
 
     func testRepresentativeCPUTemperature_prefersIntelDie() {
@@ -489,6 +525,25 @@ final class HardwareMonitorTests: XCTestCase {
             SensorReading(key: "TB0T", name: "Battery", value: 30.0, unit: .celsius, category: .battery),
         ]
         XCTAssertEqual(HardwareMonitor.representativeCPUTemperature(from: readings), 0.0)
+    }
+
+    func testRepresentativeCPUTemperature_noPerformanceCores_fallsBackToEfficiencyCores() {
+        // Simulates a machine that only exposes efficiency-core sensors.
+        let readings = [
+            SensorReading(key: "Tp09", name: "Efficiency Core 1", value: 48.0, unit: .celsius, category: .efficiencyCores),
+            SensorReading(key: "Tp0T", name: "Efficiency Core 2", value: 65.0, unit: .celsius, category: .efficiencyCores),
+        ]
+        XCTAssertEqual(HardwareMonitor.representativeCPUTemperature(from: readings), 65.0)
+    }
+
+    func testRepresentativeCPUTemperature_prefersPerformanceOverEfficiencyCores() {
+        // Even if an efficiency core is hotter, we should report the
+        // hottest *performance* core as the representative CPU value.
+        let readings = [
+            SensorReading(key: "Tp09", name: "Efficiency Core 1", value: 90.0, unit: .celsius, category: .efficiencyCores),
+            SensorReading(key: "Tp01", name: "Performance Core 1", value: 60.0, unit: .celsius, category: .performanceCores),
+        ]
+        XCTAssertEqual(HardwareMonitor.representativeCPUTemperature(from: readings), 60.0)
     }
 
     func testRepresentativeGPUTemperature_prefersIntelDie() {

@@ -62,7 +62,7 @@ enum SensorUnit: String {
 }
 
 /// Logical grouping for a `SensorReading`, used to present readings under
-/// collapsible / sectioned headings in the UI (e.g. "Performance Cores",
+/// sectioned headings in the UI (e.g. "Performance Cores",
 /// "GPU", "Battery", ...).
 enum SensorCategory: String, CaseIterable {
     case efficiencyCores = "Efficiency Cores"

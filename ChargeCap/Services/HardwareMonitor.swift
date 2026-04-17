@@ -49,6 +49,14 @@ final class HardwareMonitor: ObservableObject {
     private var previousCPUTicks: CPUTicks?
     private static let refreshInterval: TimeInterval = 3
 
+    /// Keys known to return valid readings on the current machine.
+    /// `nil` means "not probed yet" and causes the next `readTemperatures()`
+    /// call to try the full `temperatureKeys` list. Once populated, only
+    /// those keys are polled on subsequent refreshes, which avoids the
+    /// per-cycle XPC/SMC overhead of ~40 throwing reads on machines that
+    /// only expose a handful of sensors.
+    private var knownReadableKeys: Set<String>?
+
     // SMC sensor keys to query for temperatures.
     //
     // This list is a superset of keys seen across Intel and Apple Silicon
@@ -71,7 +79,7 @@ final class HardwareMonitor: ObservableObject {
         ("Tp0Y", "Efficiency Core 3", .efficiencyCores),
         ("Tp0Z", "Efficiency Core 4", .efficiencyCores),
 
-        // Apple Silicon performance cores (up to M1 Max-class: 8 cores)
+        // Apple Silicon performance cores
         ("Tp01", "Performance Core 1",  .performanceCores),
         ("Tp05", "Performance Core 2",  .performanceCores),
         ("Tp0D", "Performance Core 3",  .performanceCores),
@@ -162,6 +170,9 @@ final class HardwareMonitor: ObservableObject {
             gpuTemperature = 0.0
             fans = []
             sensors = []
+            // Force re-probing on next install so newly available sensors
+            // aren't permanently masked out.
+            knownReadableKeys = nil
             return
         }
 
@@ -177,25 +188,33 @@ final class HardwareMonitor: ObservableObject {
         // Extract key temperatures for quick access. On Intel Macs these
         // map to the CPU die / GPU die sensors; on Apple Silicon, the die
         // sensors don't exist, so we fall back to the hottest performance
-        // core and the hottest GPU cluster respectively.
+        // core and the hottest GPU cluster respectively (with a secondary
+        // fallback to any other CPU-family reading if no P-cores are
+        // exposed on the machine).
         cpuTemperature = Self.representativeCPUTemperature(from: tempReadings)
         gpuTemperature = Self.representativeGPUTemperature(from: tempReadings)
     }
 
     /// Returns a single representative CPU temperature from a set of
     /// sensor readings. Prefers Intel CPU die/proximity sensors when
-    /// available, otherwise uses the hottest reading from the CPU /
-    /// performance-core / efficiency-core categories.
+    /// available, then the hottest Apple Silicon performance core, and
+    /// finally the hottest reading from the generic CPU / efficiency-core
+    /// categories as a last resort for machines that expose neither.
     static func representativeCPUTemperature(from readings: [SensorReading]) -> Double {
         if let intelDie = readings.first(where: { $0.key == "TC0C" || $0.key == "TC0P" }) {
             return intelDie.value
         }
-        let cpuReadings = readings.filter {
-            $0.category == .performanceCores ||
-            $0.category == .efficiencyCores ||
-            $0.category == .cpu
+        let pCoreMax = readings
+            .filter { $0.category == .performanceCores }
+            .map(\.value)
+            .max()
+        if let pCoreMax { return pCoreMax }
+
+        // Secondary fallback: any other CPU-related reading.
+        let other = readings.filter {
+            $0.category == .efficiencyCores || $0.category == .cpu
         }
-        return cpuReadings.map(\.value).max() ?? 0.0
+        return other.map(\.value).max() ?? 0.0
     }
 
     /// Returns a single representative GPU temperature from a set of
@@ -324,8 +343,19 @@ final class HardwareMonitor: ObservableObject {
     func readTemperatures() async -> [SensorReading] {
         var readings: [SensorReading] = []
 
+        // On the first pass (or after a reset), probe every key. On later
+        // passes, only poll keys that previously returned a valid reading
+        // to avoid the overhead of ~40 throwing XPC/SMC reads per cycle.
+        let isProbePass = knownReadableKeys == nil
+        let keysToRead: [(key: String, name: String, category: SensorCategory)]
+        if let known = knownReadableKeys {
+            keysToRead = Self.temperatureKeys.filter { known.contains($0.key) }
+        } else {
+            keysToRead = Self.temperatureKeys
+        }
+
         await withTaskGroup(of: SensorReading?.self) { group in
-            for sensor in Self.temperatureKeys {
+            for sensor in keysToRead {
                 group.addTask { [helperManager] in
                     do {
                         let temp = try await helperManager.readSMCTemperatureValue(key: sensor.key)
@@ -354,6 +384,12 @@ final class HardwareMonitor: ObservableObject {
         // Sort by the order defined in temperatureKeys
         let keyOrder = Dictionary(uniqueKeysWithValues: Self.temperatureKeys.enumerated().map { ($1.key, $0) })
         readings.sort { (keyOrder[$0.key] ?? 99) < (keyOrder[$1.key] ?? 99) }
+
+        // Cache the set of readable keys after the probe pass so future
+        // refreshes only hit sensors that actually exist on this machine.
+        if isProbePass {
+            knownReadableKeys = Set(readings.map(\.key))
+        }
 
         return readings
     }
