@@ -7,10 +7,6 @@ import SwiftUI
 /// compact menu-bar popover by giving users a full-sized surface for
 /// inspecting data and changing settings.
 struct MainWindowView: View {
-    @EnvironmentObject private var monitor: BatteryMonitor
-    @EnvironmentObject private var controller: ChargeController
-    @EnvironmentObject private var hardwareMonitor: HardwareMonitor
-
     enum Section: String, CaseIterable, Hashable, Identifiable {
         case overview
         case battery
@@ -44,7 +40,7 @@ struct MainWindowView: View {
         }
     }
 
-    @State private var selection: Section = .overview
+    @State private var selection: Section? = .overview
 
     var body: some View {
         NavigationSplitView {
@@ -55,7 +51,7 @@ struct MainWindowView: View {
             .navigationTitle("ChargeCap")
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         } detail: {
-            detailView(for: selection)
+            detailView(for: selection ?? .overview)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(minWidth: 820, minHeight: 560)
@@ -269,12 +265,17 @@ private struct TemperaturesPane: View {
                                 HStack {
                                     Text(reading.name)
                                     Spacer()
+                                    Image(systemName: icon(for: reading.temperatureColor))
+                                        .foregroundStyle(color(for: reading.temperatureColor))
+                                        .accessibilityHidden(true)
                                     Text(reading.formattedValue)
                                         .monospacedDigit()
                                         .foregroundStyle(color(for: reading.temperatureColor))
                                         .fontWeight(.semibold)
                                 }
                                 .padding(.vertical, 6)
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel("\(reading.name), \(reading.formattedValue), \(severityLabel(for: reading.temperatureColor))")
                                 if index < hardwareMonitor.sensors.count - 1 {
                                     Divider()
                                 }
@@ -294,6 +295,22 @@ private struct TemperaturesPane: View {
         case .normal: return .green
         case .warm:   return .yellow
         case .hot:    return .red
+        }
+    }
+
+    private func icon(for level: TemperatureLevel) -> String {
+        switch level {
+        case .normal: return "checkmark.circle.fill"
+        case .warm:   return "exclamationmark.triangle.fill"
+        case .hot:    return "flame.fill"
+        }
+    }
+
+    private func severityLabel(for level: TemperatureLevel) -> String {
+        switch level {
+        case .normal: return "Normal"
+        case .warm:   return "Warm"
+        case .hot:    return "Hot"
         }
     }
 }
