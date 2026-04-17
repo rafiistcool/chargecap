@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Blue -> Green gradient for the background squircle -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"  stop-color="#007AFF"/>
+      <stop offset="55%" stop-color="#1FA6C4"/>
+      <stop offset="100%" stop-color="#34C759"/>
+    </linearGradient>
+
+    <!-- Subtle inner highlight for depth -->
+    <linearGradient id="bgHighlight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.08"/>
+    </linearGradient>
+
+    <!-- Soft drop shadow for battery -->
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8"/>
+      <feOffset dx="0" dy="6" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.25"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- macOS Big Sur-style squircle: icon art inset ~100px on a 1024 canvas,
+         corner radius ~185px. -->
+    <clipPath id="squircleClip">
+      <rect x="100" y="100" width="824" height="824" rx="185" ry="185"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background squircle -->
+  <g clip-path="url(#squircleClip)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#bgGrad)"/>
+    <rect x="100" y="100" width="824" height="824" fill="url(#bgHighlight)"/>
+  </g>
+
+  <!-- Battery body (horizontal, centered) with soft shadow -->
+  <g filter="url(#softShadow)">
+    <!-- Battery outer casing -->
+    <rect x="232" y="352" width="520" height="320" rx="72" ry="72"
+          fill="#ffffff" opacity="0.98"/>
+    <!-- Battery positive terminal cap -->
+    <rect x="752" y="444" width="44" height="136" rx="18" ry="18"
+          fill="#ffffff" opacity="0.98"/>
+  </g>
+
+  <!-- Inner battery cavity (cut-out look) -->
+  <rect x="264" y="384" width="456" height="256" rx="48" ry="48"
+        fill="none" stroke="#0A5AA8" stroke-opacity="0.18" stroke-width="4"/>
+
+  <!-- Shield emblem inside the battery (protect / cap charging) -->
+  <g transform="translate(512 512)">
+    <!-- Shield shape, centered -->
+    <path d="M 0 -150
+             C 60 -150 110 -130 150 -110
+             L 150 -20
+             C 150 60 100 120 0 160
+             C -100 120 -150 60 -150 -20
+             L -150 -110
+             C -110 -130 -60 -150 0 -150 Z"
+          fill="url(#bgGrad)"/>
+    <!-- Shield inner highlight stroke -->
+    <path d="M 0 -150
+             C 60 -150 110 -130 150 -110
+             L 150 -20
+             C 150 60 100 120 0 160
+             C -100 120 -150 60 -150 -20
+             L -150 -110
+             C -110 -130 -60 -150 0 -150 Z"
+          fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="6"/>
+    <!-- Lightning bolt inside the shield -->
+    <path d="M 18 -90
+             L -48 10
+             L -6 10
+             L -26 100
+             L 50 -18
+             L 8 -18
+             Z"
+          fill="#ffffff"/>
+  </g>
+</svg>
