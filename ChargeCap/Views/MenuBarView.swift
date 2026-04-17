@@ -198,6 +198,15 @@ struct MenuBarView: View {
         HStack(spacing: 12) {
             Button {
                 NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "mainWindow")
+            } label: {
+                Label("Main Window", systemImage: "macwindow")
+            }
+            .buttonStyle(.borderless)
+            .keyboardShortcut("0", modifiers: .command)
+
+            Button {
+                NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: "settings")
             } label: {
                 Label("Settings", systemImage: "gear")
