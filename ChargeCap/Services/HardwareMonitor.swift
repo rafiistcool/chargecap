@@ -49,15 +49,85 @@ final class HardwareMonitor: ObservableObject {
     private var previousCPUTicks: CPUTicks?
     private static let refreshInterval: TimeInterval = 3
 
-    // SMC sensor keys to query for temperatures
-    static let temperatureKeys: [(key: String, name: String)] = [
-        ("TC0C", "CPU Die"),
-        ("TC0P", "CPU Proximity"),
-        ("GC0C", "GPU"),
-        ("TB0T", "Battery"),
-        ("Ts0P", "Palm Rest"),
-        ("TM0P", "Memory"),
-        ("TN0D", "NVMe/SSD"),
+    /// Keys known to return valid readings on the current machine.
+    /// `nil` means "not probed yet" and causes the next `readTemperatures()`
+    /// call to try the full `temperatureKeys` list. Once populated, only
+    /// those keys are polled on subsequent refreshes, which avoids the
+    /// per-cycle XPC/SMC overhead of ~40 throwing reads on machines that
+    /// only expose a handful of sensors.
+    private var knownReadableKeys: Set<String>?
+
+    // SMC sensor keys to query for temperatures.
+    //
+    // This list is a superset of keys seen across Intel and Apple Silicon
+    // Macs (M1 / M1 Pro / M1 Max / M2 / M3 families). Keys that do not
+    // exist on a given machine simply throw when read and are discarded by
+    // `readTemperatures()`, so enumerating extra keys here is safe.
+    //
+    // Names and categories are chosen to mirror what apps like TG Pro
+    // present to the user so that the Temperatures view can show detailed
+    // per-component readings grouped by subsystem.
+    static let temperatureKeys: [(key: String, name: String, category: SensorCategory)] = [
+        // Intel-era / generic CPU + GPU die sensors
+        ("TC0C", "CPU Die",           .cpu),
+        ("TC0P", "CPU Proximity",     .cpu),
+        ("GC0C", "GPU",               .gpu),
+
+        // Apple Silicon efficiency cores
+        ("Tp09", "Efficiency Core 1", .efficiencyCores),
+        ("Tp0T", "Efficiency Core 2", .efficiencyCores),
+        ("Tp0Y", "Efficiency Core 3", .efficiencyCores),
+        ("Tp0Z", "Efficiency Core 4", .efficiencyCores),
+
+        // Apple Silicon performance cores
+        ("Tp01", "Performance Core 1",  .performanceCores),
+        ("Tp05", "Performance Core 2",  .performanceCores),
+        ("Tp0D", "Performance Core 3",  .performanceCores),
+        ("Tp0H", "Performance Core 4",  .performanceCores),
+        ("Tp0L", "Performance Core 5",  .performanceCores),
+        ("Tp0P", "Performance Core 6",  .performanceCores),
+        ("Tp0X", "Performance Core 7",  .performanceCores),
+        ("Tp0b", "Performance Core 8",  .performanceCores),
+        ("Tp0f", "Performance Core 9",  .performanceCores),
+        ("Tp0j", "Performance Core 10", .performanceCores),
+
+        // Apple Silicon GPU clusters
+        ("Tg05", "GPU Cluster 1", .gpu),
+        ("Tg0D", "GPU Cluster 2", .gpu),
+        ("Tg0L", "GPU Cluster 3", .gpu),
+        ("Tg0T", "GPU Cluster 4", .gpu),
+
+        // Memory
+        ("TM0P", "Memory", .memory),
+
+        // Battery
+        ("TB0T", "Battery",                 .battery),
+        ("TB1T", "Battery Gas Gauge",       .battery),
+        ("TB2T", "Battery Management Unit", .battery),
+        ("TB0P", "Battery Proximity",       .battery),
+
+        // Storage
+        ("TN0D", "NVMe/SSD",     .storage),
+        ("TH0a", "SSD",          .storage),
+        ("TH0x", "SSD (NAND I/O)", .storage),
+
+        // Airflow
+        ("TaLP", "Airflow Left",  .airflow),
+        ("TaRP", "Airflow Right", .airflow),
+
+        // Chassis / surface
+        ("Ts0P", "Palm Rest",         .chassis),
+        ("Ts0S", "Trackpad",          .chassis),
+        ("Ts1S", "Trackpad Actuator", .chassis),
+
+        // Power / charger
+        ("TCGC", "Charger Proximity",     .power),
+        ("TPCD", "Power Supply Proximity", .power),
+
+        // Proximity (ports / wireless)
+        ("TTLD", "Left Thunderbolt Ports Proximity",  .proximity),
+        ("TTRD", "Right Thunderbolt Ports Proximity", .proximity),
+        ("TW0P", "Wireless Proximity",                .proximity),
     ]
 
     init(helperManager: any SMCReadable, startMonitoring: Bool = true) {
@@ -100,6 +170,9 @@ final class HardwareMonitor: ObservableObject {
             gpuTemperature = 0.0
             fans = []
             sensors = []
+            // Force re-probing on next install so newly available sensors
+            // aren't permanently masked out.
+            knownReadableKeys = nil
             return
         }
 
@@ -112,9 +185,47 @@ final class HardwareMonitor: ObservableObject {
         sensors = tempReadings
         fans = fanReadings
 
-        // Extract key temperatures for quick access
-        cpuTemperature = tempReadings.first(where: { $0.key == "TC0C" || $0.key == "TC0P" })?.value ?? 0.0
-        gpuTemperature = tempReadings.first(where: { $0.key == "GC0C" })?.value ?? 0.0
+        // Extract key temperatures for quick access. On Intel Macs these
+        // map to the CPU die / GPU die sensors; on Apple Silicon, the die
+        // sensors don't exist, so we fall back to the hottest performance
+        // core and the hottest GPU cluster respectively (with a secondary
+        // fallback to any other CPU-family reading if no P-cores are
+        // exposed on the machine).
+        cpuTemperature = Self.representativeCPUTemperature(from: tempReadings)
+        gpuTemperature = Self.representativeGPUTemperature(from: tempReadings)
+    }
+
+    /// Returns a single representative CPU temperature from a set of
+    /// sensor readings. Prefers Intel CPU die/proximity sensors when
+    /// available, then the hottest Apple Silicon performance core, and
+    /// finally the hottest reading from the generic CPU / efficiency-core
+    /// categories as a last resort for machines that expose neither.
+    static func representativeCPUTemperature(from readings: [SensorReading]) -> Double {
+        if let intelDie = readings.first(where: { $0.key == "TC0C" || $0.key == "TC0P" }) {
+            return intelDie.value
+        }
+        let pCoreMax = readings
+            .filter { $0.category == .performanceCores }
+            .map(\.value)
+            .max()
+        if let pCoreMax { return pCoreMax }
+
+        // Secondary fallback: any other CPU-related reading.
+        let other = readings.filter {
+            $0.category == .efficiencyCores || $0.category == .cpu
+        }
+        return other.map(\.value).max() ?? 0.0
+    }
+
+    /// Returns a single representative GPU temperature from a set of
+    /// sensor readings. Prefers the Intel GPU die sensor when present,
+    /// otherwise uses the hottest Apple Silicon GPU cluster.
+    static func representativeGPUTemperature(from readings: [SensorReading]) -> Double {
+        if let intelDie = readings.first(where: { $0.key == "GC0C" }) {
+            return intelDie.value
+        }
+        let gpuReadings = readings.filter { $0.category == .gpu }
+        return gpuReadings.map(\.value).max() ?? 0.0
     }
 
     // MARK: - CPU Usage (Mach Kernel API)
@@ -232,8 +343,19 @@ final class HardwareMonitor: ObservableObject {
     func readTemperatures() async -> [SensorReading] {
         var readings: [SensorReading] = []
 
+        // On the first pass (or after a reset), probe every key. On later
+        // passes, only poll keys that previously returned a valid reading
+        // to avoid the overhead of ~40 throwing XPC/SMC reads per cycle.
+        let isProbePass = knownReadableKeys == nil
+        let keysToRead: [(key: String, name: String, category: SensorCategory)]
+        if let known = knownReadableKeys {
+            keysToRead = Self.temperatureKeys.filter { known.contains($0.key) }
+        } else {
+            keysToRead = Self.temperatureKeys
+        }
+
         await withTaskGroup(of: SensorReading?.self) { group in
-            for sensor in Self.temperatureKeys {
+            for sensor in keysToRead {
                 group.addTask { [helperManager] in
                     do {
                         let temp = try await helperManager.readSMCTemperatureValue(key: sensor.key)
@@ -243,7 +365,8 @@ final class HardwareMonitor: ObservableObject {
                             key: sensor.key,
                             name: sensor.name,
                             value: temp,
-                            unit: .celsius
+                            unit: .celsius,
+                            category: sensor.category
                         )
                     } catch {
                         return nil
@@ -261,6 +384,12 @@ final class HardwareMonitor: ObservableObject {
         // Sort by the order defined in temperatureKeys
         let keyOrder = Dictionary(uniqueKeysWithValues: Self.temperatureKeys.enumerated().map { ($1.key, $0) })
         readings.sort { (keyOrder[$0.key] ?? 99) < (keyOrder[$1.key] ?? 99) }
+
+        // Cache the set of readable keys after the probe pass so future
+        // refreshes only hit sensors that actually exist on this machine.
+        if isProbePass {
+            knownReadableKeys = Set(readings.map(\.key))
+        }
 
         return readings
     }

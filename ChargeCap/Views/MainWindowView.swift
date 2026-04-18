@@ -249,6 +249,16 @@ private struct BatteryPane: View {
 private struct TemperaturesPane: View {
     @EnvironmentObject private var hardwareMonitor: HardwareMonitor
 
+    /// Sensors grouped by category and sorted by the category's display order.
+    /// Each group preserves the original order the sensors were returned in
+    /// (which matches the order in `HardwareMonitor.temperatureKeys`).
+    private var groupedSensors: [(category: SensorCategory, readings: [SensorReading])] {
+        let grouped = Dictionary(grouping: hardwareMonitor.sensors, by: { $0.category })
+        return grouped
+            .map { (category: $0.key, readings: $0.value) }
+            .sorted { $0.category.sortOrder < $1.category.sortOrder }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -259,34 +269,44 @@ private struct TemperaturesPane: View {
                         .foregroundStyle(.secondary)
                         .padding()
                 } else {
-                    GroupBox {
-                        VStack(spacing: 0) {
-                            ForEach(Array(hardwareMonitor.sensors.enumerated()), id: \.element.id) { index, reading in
-                                HStack {
-                                    Text(reading.name)
-                                    Spacer()
-                                    Image(systemName: icon(for: reading.temperatureColor))
-                                        .foregroundStyle(color(for: reading.temperatureColor))
-                                        .accessibilityHidden(true)
-                                    Text(reading.formattedValue)
-                                        .monospacedDigit()
-                                        .foregroundStyle(color(for: reading.temperatureColor))
-                                        .fontWeight(.semibold)
-                                }
-                                .padding(.vertical, 6)
-                                .accessibilityElement(children: .combine)
-                                .accessibilityLabel("\(reading.name), \(reading.formattedValue), \(severityLabel(for: reading.temperatureColor))")
-                                if index < hardwareMonitor.sensors.count - 1 {
-                                    Divider()
-                                }
-                            }
-                        }
+                    ForEach(groupedSensors, id: \.category) { group in
+                        sensorGroup(category: group.category, readings: group.readings)
                     }
                 }
 
                 Spacer(minLength: 0)
             }
             .padding(24)
+        }
+    }
+
+    @ViewBuilder
+    private func sensorGroup(category: SensorCategory, readings: [SensorReading]) -> some View {
+        GroupBox {
+            VStack(spacing: 0) {
+                ForEach(Array(readings.enumerated()), id: \.element.id) { index, reading in
+                    HStack {
+                        Text(reading.name)
+                        Spacer()
+                        Image(systemName: icon(for: reading.temperatureColor))
+                            .foregroundStyle(color(for: reading.temperatureColor))
+                            .accessibilityHidden(true)
+                        Text(reading.formattedValue)
+                            .monospacedDigit()
+                            .foregroundStyle(color(for: reading.temperatureColor))
+                            .fontWeight(.semibold)
+                    }
+                    .padding(.vertical, 6)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(reading.name), \(reading.formattedValue), \(severityLabel(for: reading.temperatureColor))")
+                    if index < readings.count - 1 {
+                        Divider()
+                    }
+                }
+            }
+        } label: {
+            Label(category.rawValue, systemImage: category.systemImage)
+                .font(.headline)
         }
     }
 
