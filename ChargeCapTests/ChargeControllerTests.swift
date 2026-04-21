@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import ChargeCap
 
@@ -637,5 +638,229 @@ final class ChargeControllerStateTests: XCTestCase {
         let state = ChargeController.makeInitialState(settings: settings)
 
         XCTAssertEqual(state.resumeThreshold, 80) // same as target when sailing disabled
+    }
+}
+
+@MainActor
+private final class MockBatteryMonitor {
+    private let subject: CurrentValueSubject<BatteryState, Never>
+
+    var batteryState: BatteryState
+    var batteryStatePublisher: AnyPublisher<BatteryState, Never> {
+        subject.eraseToAnyPublisher()
+    }
+
+    private(set) var refreshIntervals: [Int] = []
+    private(set) var metadataUpdates: [(limit: Int?, isChargeInhibited: Bool)] = []
+
+    init(initialState: BatteryState) {
+        batteryState = initialState
+        subject = CurrentValueSubject(initialState)
+    }
+
+    func send(_ nextState: BatteryState) {
+        batteryState = nextState
+        subject.send(nextState)
+    }
+
+    func updateRefreshInterval(seconds: Int) {
+        refreshIntervals.append(seconds)
+    }
+
+    func updateChargeMetadata(limit: Int?, isChargeInhibited: Bool) {
+        metadataUpdates.append((limit, isChargeInhibited))
+        batteryState.chargeLimit = limit
+        batteryState.isChargeInhibited = isChargeInhibited
+    }
+
+    func updateSMCReadings(batteryRate: Int?, temperature: Double?) {
+        batteryState.batteryRate = batteryRate
+        if let temperature {
+            batteryState.temperature = temperature
+        }
+    }
+}
+
+@MainActor
+extension MockBatteryMonitor: BatteryMonitoring {}
+
+@MainActor
+private final class MockChargeControllerSettings: ChargeControllerSettings {
+    private let subject = PassthroughSubject<Void, Never>()
+
+    var isChargeLimitingEnabled: Bool { didSet { subject.send(()) } }
+    var targetChargeLimit: Int { didSet { subject.send(()) } }
+    var sailingRange: Int { didSet { subject.send(()) } }
+    var isSailingModeEnabled: Bool { didSet { subject.send(()) } }
+    var isHeatProtectionEnabled: Bool { didSet { subject.send(()) } }
+    var warmTemperatureThreshold: Int { didSet { subject.send(()) } }
+    var hotTemperatureThreshold: Int { didSet { subject.send(()) } }
+    var chargeSchedule: ChargeSchedule { didSet { subject.send(()) } }
+    var refreshIntervalSeconds: Int { didSet { subject.send(()) } }
+
+    var chargeControlSettingsPublisher: AnyPublisher<Void, Never> {
+        subject.eraseToAnyPublisher()
+    }
+
+    init(
+        isChargeLimitingEnabled: Bool = true,
+        targetChargeLimit: Int = 80,
+        sailingRange: Int = 5,
+        isSailingModeEnabled: Bool = true,
+        isHeatProtectionEnabled: Bool = false,
+        warmTemperatureThreshold: Int = 35,
+        hotTemperatureThreshold: Int = 40,
+        chargeSchedule: ChargeSchedule = .default,
+        refreshIntervalSeconds: Int = Int(Constants.defaultRefreshInterval)
+    ) {
+        self.isChargeLimitingEnabled = isChargeLimitingEnabled
+        self.targetChargeLimit = targetChargeLimit
+        self.sailingRange = sailingRange
+        self.isSailingModeEnabled = isSailingModeEnabled
+        self.isHeatProtectionEnabled = isHeatProtectionEnabled
+        self.warmTemperatureThreshold = warmTemperatureThreshold
+        self.hotTemperatureThreshold = hotTemperatureThreshold
+        self.chargeSchedule = chargeSchedule
+        self.refreshIntervalSeconds = refreshIntervalSeconds
+    }
+}
+
+@MainActor
+private final class MockChargeControlHelper: ChargeControlHelping {
+    var isInstalled = false
+    var lastErrorDescription: String?
+
+    var enableDelayNanoseconds: UInt64 = 0
+    var disableDelayNanoseconds: UInt64 = 0
+    var pauseDelayNanoseconds: UInt64 = 0
+
+    private(set) var appliedCommands: [ChargeCommand] = []
+
+    func refreshStatus() async {}
+    func installIfNeeded(force: Bool) async throws {}
+
+    func enableCharging() async throws {
+        if enableDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: enableDelayNanoseconds)
+        }
+        appliedCommands.append(.normal)
+    }
+
+    func disableCharging() async throws {
+        if disableDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: disableDelayNanoseconds)
+        }
+        appliedCommands.append(.inhibit)
+    }
+
+    func pauseCharging() async throws {
+        if pauseDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: pauseDelayNanoseconds)
+        }
+        appliedCommands.append(.pause)
+    }
+
+    func batteryRate() async throws -> UInt32 { 0 }
+    func batteryTemperatureFromSMC() async throws -> Double { 0 }
+}
+
+@MainActor
+private final class MockProFeatureManager: ProFeatureManaging {
+    private let subject: CurrentValueSubject<Bool, Never>
+
+    var hasUnlockedPro: Bool {
+        didSet { subject.send(hasUnlockedPro) }
+    }
+
+    var hasUnlockedProPublisher: AnyPublisher<Bool, Never> {
+        subject.eraseToAnyPublisher()
+    }
+
+    init(hasUnlockedPro: Bool = true) {
+        self.hasUnlockedPro = hasUnlockedPro
+        subject = CurrentValueSubject(hasUnlockedPro)
+    }
+}
+
+@MainActor
+final class ChargeControllerCommandQueueTests: XCTestCase {
+    private func makeBatteryState(
+        chargePercent: Int,
+        isCharging: Bool = true,
+        isPluggedIn: Bool = true
+    ) -> BatteryState {
+        BatteryState(
+            chargePercent: chargePercent,
+            isCharging: isCharging,
+            isPluggedIn: isPluggedIn,
+            chargeLimit: nil,
+            batteryRate: nil,
+            timeToFull: 60,
+            timeToEmpty: 0,
+            healthPercent: 100,
+            condition: .normal,
+            cycleCount: 100,
+            maxCycleCount: 1000,
+            temperature: 30,
+            designCapacity: 5000,
+            maxCapacity: 5000,
+            adapterWattage: 67,
+            isChargeInhibited: false,
+            hasBattery: true
+        )
+    }
+
+    func testQueuedCommandRunsAfterCurrentCommandFinishes() async throws {
+        let monitor = MockBatteryMonitor(initialState: makeBatteryState(chargePercent: 85))
+        let settings = MockChargeControllerSettings()
+        let helper = MockChargeControlHelper()
+        let proManager = MockProFeatureManager()
+        helper.disableDelayNanoseconds = 200_000_000
+
+        let controller = ChargeController(
+            monitor: monitor,
+            settings: settings,
+            helperManager: helper,
+            proManager: proManager
+        )
+
+        await Task.yield()
+
+        helper.isInstalled = true
+        monitor.send(makeBatteryState(chargePercent: 85))
+        try await Task.sleep(nanoseconds: 50_000_000)
+        monitor.send(makeBatteryState(chargePercent: 70))
+        try await Task.sleep(nanoseconds: 350_000_000)
+
+        XCTAssertEqual(helper.appliedCommands, [.inhibit, .normal])
+        XCTAssertEqual(controller.state.command, .normal)
+    }
+
+    func testLatestQueuedCommandWinsWhileApplyIsInFlight() async throws {
+        let monitor = MockBatteryMonitor(initialState: makeBatteryState(chargePercent: 85))
+        let settings = MockChargeControllerSettings()
+        let helper = MockChargeControlHelper()
+        let proManager = MockProFeatureManager()
+        helper.disableDelayNanoseconds = 200_000_000
+
+        let controller = ChargeController(
+            monitor: monitor,
+            settings: settings,
+            helperManager: helper,
+            proManager: proManager
+        )
+
+        await Task.yield()
+
+        helper.isInstalled = true
+        monitor.send(makeBatteryState(chargePercent: 85))
+        try await Task.sleep(nanoseconds: 50_000_000)
+        monitor.send(makeBatteryState(chargePercent: 70))
+        try await Task.sleep(nanoseconds: 50_000_000)
+        monitor.send(makeBatteryState(chargePercent: 85))
+        try await Task.sleep(nanoseconds: 350_000_000)
+
+        XCTAssertEqual(helper.appliedCommands, [.inhibit])
+        XCTAssertEqual(controller.state.command, .inhibit)
     }
 }

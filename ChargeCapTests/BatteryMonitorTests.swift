@@ -74,6 +74,10 @@ final class BatteryMonitorTests: XCTestCase {
             "AppleRawMaxCapacity": 4500,
             "Temperature": 2984,
             "AdapterDetails": ["Watts": 67],
+            "PowerTelemetryData": [
+                "SystemLoad": 13_181,
+                "BatteryPower": NSNumber(value: UInt64(bitPattern: Int64(-4_250))),
+            ],
         ]
 
         let snapshot = BatteryMonitor.parseRegistryProperties(properties)
@@ -84,6 +88,8 @@ final class BatteryMonitorTests: XCTestCase {
         XCTAssertEqual(snapshot.healthPercent, 90)
         XCTAssertEqual(snapshot.temperature, 25.25, accuracy: 0.01)
         XCTAssertEqual(snapshot.adapterWattage, 67)
+        XCTAssertEqual(snapshot.systemLoadMilliwatts, 13_181)
+        XCTAssertEqual(snapshot.batteryPowerMilliwatts, -4_250)
     }
 
     func testMakeBatteryState_combinesParsedSnapshots() {
@@ -101,7 +107,9 @@ final class BatteryMonitorTests: XCTestCase {
             maxCapacity: 4500,
             temperature: 31.5,
             healthPercent: 90,
-            adapterWattage: 96
+            adapterWattage: 96,
+            systemLoadMilliwatts: 12_870,
+            batteryPowerMilliwatts: 4_360
         )
 
         let state = BatteryMonitor.makeBatteryState(
@@ -118,7 +126,19 @@ final class BatteryMonitorTests: XCTestCase {
         XCTAssertEqual(state.condition, .serviceRecommended)
         XCTAssertEqual(state.temperature, 31.5)
         XCTAssertEqual(state.adapterWattage, 96)
+        XCTAssertEqual(state.systemLoadMilliwatts, 12_870)
+        XCTAssertEqual(state.batteryPowerMilliwatts, 4_360)
         XCTAssertTrue(state.hasBattery)
+    }
+
+    func testFirstSignedIntValue_readsTwosComplementNSNumber() {
+        let dict: [String: Any] = [
+            "BatteryPower": NSNumber(value: UInt64(bitPattern: Int64(-13_181))),
+        ]
+
+        let result = BatteryMonitor.firstSignedIntValueForKeys(in: dict, keys: ["BatteryPower"])
+
+        XCTAssertEqual(result, -13_181)
     }
 
     // MARK: - firstPositiveIntValueForKeys
@@ -355,5 +375,30 @@ final class BatteryMonitorTests: XCTestCase {
         monitor.updateSMCReadings(batteryRate: nil, temperature: nil)
 
         XCTAssertNil(monitor.smcBatteryRate)
+    }
+
+    func testBatteryState_usesBatteryRateAsSystemLoadFallbackWhileDischarging() throws {
+        let state = BatteryState(
+            chargePercent: 67,
+            isCharging: false,
+            isPluggedIn: false,
+            chargeLimit: nil,
+            batteryRate: -15_140,
+            timeToFull: 0,
+            timeToEmpty: 266,
+            healthPercent: 97,
+            condition: .normal,
+            cycleCount: 41,
+            maxCycleCount: 1000,
+            temperature: 28.6,
+            designCapacity: 8579,
+            maxCapacity: 8214,
+            adapterWattage: 0,
+            isChargeInhibited: false,
+            hasBattery: true
+        )
+
+        XCTAssertEqual(try XCTUnwrap(state.systemLoadWatts), 15.14, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(state.batteryDischargingWatts), 15.14, accuracy: 0.001)
     }
 }

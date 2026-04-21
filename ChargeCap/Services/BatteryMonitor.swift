@@ -21,6 +21,8 @@ final class BatteryMonitor: ObservableObject {
         let temperature: Double
         let healthPercent: Int
         let adapterWattage: Int
+        let systemLoadMilliwatts: Int?
+        let batteryPowerMilliwatts: Int?
 
         static let empty = RegistrySnapshot(
             cycleCount: 0,
@@ -28,7 +30,9 @@ final class BatteryMonitor: ObservableObject {
             maxCapacity: 0,
             temperature: 0,
             healthPercent: 100,
-            adapterWattage: 0
+            adapterWattage: 0,
+            systemLoadMilliwatts: nil,
+            batteryPowerMilliwatts: nil
         )
     }
 
@@ -43,9 +47,53 @@ final class BatteryMonitor: ObservableObject {
     @Published private(set) var activeChargeLimit: Int?
 
     private var timer: AnyCancellable?
-    private var refreshInterval: TimeInterval = Constants.defaultRefreshInterval
+    private var configuredRefreshInterval: TimeInterval = Constants.defaultRefreshInterval
+    private var isInteractiveRefreshEnabled = false
+    private let refreshLock = NSLock()
+    private var isRefreshing = false
+    private var refreshPending = false
     private static let percentageRange = 1...100
     private static let maxReasonableCapacityMultiplier = 2
+    private static let maxCyclesByModel: [String: Int] = [
+        // Intel MacBook Pro (2019–2020)
+        "MacBookPro16,1": 1000, "MacBookPro16,2": 1000,
+        "MacBookPro16,3": 1000, "MacBookPro16,4": 1000,
+        // Intel MacBook Pro (2018)
+        "MacBookPro15,1": 1000, "MacBookPro15,2": 1000,
+        "MacBookPro15,3": 1000, "MacBookPro15,4": 1000,
+        // Intel MacBook Pro (2016–2017)
+        "MacBookPro14,1": 1000, "MacBookPro14,2": 1000, "MacBookPro14,3": 1000,
+        "MacBookPro13,1": 1000, "MacBookPro13,2": 1000, "MacBookPro13,3": 1000,
+        // Intel MacBook Pro (2015)
+        "MacBookPro12,1": 1000,
+        "MacBookPro11,1": 1000, "MacBookPro11,2": 1000,
+        "MacBookPro11,3": 1000, "MacBookPro11,4": 1000, "MacBookPro11,5": 1000,
+        // M1 MacBook Pro
+        "MacBookPro17,1": 1000,
+        "MacBookPro18,1": 1000, "MacBookPro18,2": 1000,
+        "MacBookPro18,3": 1000, "MacBookPro18,4": 1000,
+        // M2 MacBook Pro
+        "Mac14,5": 1000, "Mac14,6": 1000, "Mac14,7": 1000,
+        "Mac14,9": 1000, "Mac14,10": 1000,
+        // M3 MacBook Pro
+        "Mac15,3": 1000,
+        "Mac15,6": 1000, "Mac15,7": 1000,
+        "Mac15,8": 1000, "Mac15,9": 1000,
+        "Mac15,10": 1000, "Mac15,11": 1000,
+        // MacBook Air — M1
+        "MacBookAir10,1": 1000,
+        // MacBook Air — M2
+        "Mac14,2": 1000, "Mac14,15": 1000,
+        // MacBook Air — M3
+        "Mac15,12": 1000, "Mac15,13": 1000,
+        // Intel MacBook Air (2018–2020)
+        "MacBookAir9,1": 1000, "MacBookAir8,1": 1000, "MacBookAir8,2": 1000,
+        // Intel MacBook Air (2015–2017)
+        "MacBookAir7,1": 1000, "MacBookAir7,2": 1000,
+        // MacBook (12-inch, 2015–2019)
+        "MacBook10,1": 300, "MacBook9,1": 300, "MacBook8,1": 300,
+    ]
+    private static let currentModel = readCurrentModel()
 
     init(startMonitoring: Bool = true) {
         batteryState = BatteryState.placeholder
@@ -55,35 +103,41 @@ final class BatteryMonitor: ObservableObject {
     }
 
     private func startTimer() {
-        timer = Timer.publish(every: refreshInterval, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in self?.refresh() }
+        scheduleTimer()
     }
 
     func updateRefreshInterval(seconds: Int) {
         let clampedInterval = min(Constants.maxRefreshInterval, max(Constants.minRefreshInterval, TimeInterval(seconds)))
-        guard refreshInterval != clampedInterval else { return }
-        refreshInterval = clampedInterval
-        timer?.cancel()
-        startTimer()
+        guard configuredRefreshInterval != clampedInterval else { return }
+        configuredRefreshInterval = clampedInterval
+        restartTimer(refreshImmediately: false)
+    }
+
+    func setInteractiveRefreshEnabled(_ enabled: Bool) {
+        guard isInteractiveRefreshEnabled != enabled else { return }
+        isInteractiveRefreshEnabled = enabled
+        restartTimer(refreshImmediately: enabled)
     }
 
     /// Refresh battery state from the system on a background thread.
     func refresh() {
-        let currentChargeLimit = activeChargeLimit
-        let currentChargeInhibited = isChargeInhibited
-        let currentSMCBatteryRate = smcBatteryRate
-        let currentSMCBatteryTemperature = smcBatteryTemperature
+        refreshLock.lock()
+        let shouldStartRefresh: Bool
+        if isRefreshing {
+            refreshPending = true
+            shouldStartRefresh = false
+        } else {
+            isRefreshing = true
+            shouldStartRefresh = true
+        }
+        refreshLock.unlock()
+
+        guard shouldStartRefresh else { return }
 
         Task.detached(priority: .utility) { [weak self] in
             let state = Self.readBatteryState()
-            await self?.applyRefreshedState(
-                state,
-                chargeLimit: currentChargeLimit,
-                isChargeInhibited: currentChargeInhibited,
-                smcBatteryRate: currentSMCBatteryRate,
-                smcBatteryTemperature: currentSMCBatteryTemperature
-            )
+            await self?.applyRefreshedState(state)
+            self?.finishRefresh()
         }
     }
 
@@ -183,15 +237,9 @@ final class BatteryMonitor: ObservableObject {
     }
 
     @MainActor
-    private func applyRefreshedState(
-        _ state: BatteryState,
-        chargeLimit: Int?,
-        isChargeInhibited: Bool,
-        smcBatteryRate: Int?,
-        smcBatteryTemperature: Double?
-    ) {
+    private func applyRefreshedState(_ state: BatteryState) {
         var mergedState = state
-        mergedState.chargeLimit = chargeLimit
+        mergedState.chargeLimit = activeChargeLimit
         mergedState.isChargeInhibited = isChargeInhibited
         mergedState.batteryRate = smcBatteryRate
 
@@ -204,57 +252,56 @@ final class BatteryMonitor: ObservableObject {
         }
     }
 
+    private func finishRefresh() {
+        refreshLock.lock()
+        let shouldStartNextRefresh: Bool
+        if refreshPending {
+            refreshPending = false
+            shouldStartNextRefresh = true
+        } else {
+            isRefreshing = false
+            shouldStartNextRefresh = false
+        }
+        refreshLock.unlock()
+
+        if shouldStartNextRefresh {
+            refresh()
+        }
+    }
+
+    private var effectiveRefreshInterval: TimeInterval {
+        guard isInteractiveRefreshEnabled else { return configuredRefreshInterval }
+        return min(configuredRefreshInterval, Constants.interactiveRefreshInterval)
+    }
+
+    private func scheduleTimer() {
+        timer = Timer.publish(every: effectiveRefreshInterval, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in self?.refresh() }
+    }
+
+    private func restartTimer(refreshImmediately: Bool) {
+        timer?.cancel()
+        scheduleTimer()
+
+        if refreshImmediately {
+            refresh()
+        }
+    }
+
     /// Returns the maximum recommended battery cycle count for the current Mac model.
     /// Reference: https://support.apple.com/en-us/HT201585
     private static func modelMaxCycleCount() -> Int {
-        let maxCycles: [String: Int] = [
-            // Intel MacBook Pro (2019–2020)
-            "MacBookPro16,1": 1000, "MacBookPro16,2": 1000,
-            "MacBookPro16,3": 1000, "MacBookPro16,4": 1000,
-            // Intel MacBook Pro (2018)
-            "MacBookPro15,1": 1000, "MacBookPro15,2": 1000,
-            "MacBookPro15,3": 1000, "MacBookPro15,4": 1000,
-            // Intel MacBook Pro (2016–2017)
-            "MacBookPro14,1": 1000, "MacBookPro14,2": 1000, "MacBookPro14,3": 1000,
-            "MacBookPro13,1": 1000, "MacBookPro13,2": 1000, "MacBookPro13,3": 1000,
-            // Intel MacBook Pro (2015)
-            "MacBookPro12,1": 1000,
-            "MacBookPro11,1": 1000, "MacBookPro11,2": 1000,
-            "MacBookPro11,3": 1000, "MacBookPro11,4": 1000, "MacBookPro11,5": 1000,
-            // M1 MacBook Pro
-            "MacBookPro17,1": 1000,
-            "MacBookPro18,1": 1000, "MacBookPro18,2": 1000,
-            "MacBookPro18,3": 1000, "MacBookPro18,4": 1000,
-            // M2 MacBook Pro
-            "Mac14,5": 1000, "Mac14,6": 1000, "Mac14,7": 1000,
-            "Mac14,9": 1000, "Mac14,10": 1000,
-            // M3 MacBook Pro
-            "Mac15,3": 1000,
-            "Mac15,6": 1000, "Mac15,7": 1000,
-            "Mac15,8": 1000, "Mac15,9": 1000,
-            "Mac15,10": 1000, "Mac15,11": 1000,
-            // MacBook Air — M1
-            "MacBookAir10,1": 1000,
-            // MacBook Air — M2
-            "Mac14,2": 1000, "Mac14,15": 1000,
-            // MacBook Air — M3
-            "Mac15,12": 1000, "Mac15,13": 1000,
-            // Intel MacBook Air (2018–2020)
-            "MacBookAir9,1": 1000, "MacBookAir8,1": 1000, "MacBookAir8,2": 1000,
-            // Intel MacBook Air (2015–2017)
-            "MacBookAir7,1": 1000, "MacBookAir7,2": 1000,
-            // MacBook (12-inch, 2015–2019)
-            "MacBook10,1": 300, "MacBook9,1": 300, "MacBook8,1": 300,
-        ]
+        maxCyclesByModel[currentModel] ?? 1000
+    }
 
+    private static func readCurrentModel() -> String {
         var size = 0
         sysctlbyname("hw.model", nil, &size, nil, 0)
-        guard size > 0 else { return 1000 }
+        guard size > 0 else { return "" }
         var model = [CChar](repeating: 0, count: size)
         sysctlbyname("hw.model", &model, &size, nil, 0)
-        let modelString = String(cString: model)
-
-        return maxCycles[modelString] ?? 1000
+        return String(cString: model)
     }
 
     static func parsePowerSourceDescription(_ desc: [String: Any]) -> PowerSourceSnapshot? {
@@ -297,13 +344,19 @@ final class BatteryMonitor: ObservableObject {
             adapterWattage = 0
         }
 
+        let powerTelemetry = dict["PowerTelemetryData"] as? [String: Any] ?? [:]
+        let systemLoadMilliwatts = firstSignedIntValueForKeys(in: powerTelemetry, keys: ["SystemLoad"])
+        let batteryPowerMilliwatts = firstSignedIntValueForKeys(in: powerTelemetry, keys: ["BatteryPower"])
+
         return RegistrySnapshot(
             cycleCount: cycleCount,
             designCapacity: designCapacity,
             maxCapacity: maxCapacity,
             temperature: temperature,
             healthPercent: healthPercent,
-            adapterWattage: adapterWattage
+            adapterWattage: adapterWattage,
+            systemLoadMilliwatts: systemLoadMilliwatts,
+            batteryPowerMilliwatts: batteryPowerMilliwatts
         )
     }
 
@@ -318,6 +371,8 @@ final class BatteryMonitor: ObservableObject {
             isPluggedIn: powerSource.isPluggedIn,
             chargeLimit: nil,
             batteryRate: nil,
+            systemLoadMilliwatts: registry.systemLoadMilliwatts,
+            batteryPowerMilliwatts: registry.batteryPowerMilliwatts,
             timeToFull: powerSource.timeToFull,
             timeToEmpty: powerSource.timeToEmpty,
             healthPercent: registry.healthPercent,
@@ -341,6 +396,27 @@ final class BatteryMonitor: ObservableObject {
 
             if let value = dict[key] as? NSNumber, value.intValue > 0 {
                 return value.intValue
+            }
+        }
+
+        return nil
+    }
+
+    static func firstSignedIntValueForKeys(in dict: [String: Any], keys: [String]) -> Int? {
+        for key in keys {
+            guard let rawValue = dict[key] else { continue }
+
+            switch rawValue {
+            case let value as Int:
+                return value
+            case let value as Int64:
+                return Int(truncatingIfNeeded: value)
+            case let value as UInt64:
+                return Int(truncatingIfNeeded: Int64(bitPattern: value))
+            case let value as NSNumber:
+                return Int(truncatingIfNeeded: Int64(bitPattern: value.uint64Value))
+            default:
+                continue
             }
         }
 

@@ -19,10 +19,14 @@ final class PrivilegedHelperManager: ObservableObject {
             options: .privileged
         )
         conn.remoteObjectInterface = NSXPCInterface(with: ChargeCapHelperProtocol.self)
+        conn.interruptionHandler = { [weak self] in
+            Task { @MainActor in
+                self?.handleConnectionFailure()
+            }
+        }
         conn.invalidationHandler = { [weak self] in
             Task { @MainActor in
-                self?.isInstalled = false
-                self?._connection = nil
+                self?.handleConnectionFailure()
             }
         }
         conn.resume()
@@ -96,22 +100,12 @@ final class PrivilegedHelperManager: ObservableObject {
     }
 
     func readSMCFloatValue(key: String) async throws -> Float {
-        guard let helper = helperProxy else {
-            throw HelperError.connectionUnavailable
-        }
-
-        return try await withCheckedThrowingContinuation { raw in
-            let continuation = SafeContinuation(raw)
-
-            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
-                continuation.resume(throwing: HelperError.connectionUnavailable)
-            }
-
+        try await invokeHelper { helper, finish in
             helper.readSMCFloat(key: key) { value, errorDescription in
                 if let errorDescription {
-                    continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
+                    finish(.failure(HelperError.readFailed(key: key, description: errorDescription)))
                 } else {
-                    continuation.resume(returning: value)
+                    finish(.success(value))
                 }
             }
         }
@@ -122,74 +116,32 @@ final class PrivilegedHelperManager: ObservableObject {
     }
 
     func readSMCByteValue(key: String) async throws -> UInt8 {
-        guard let helper = helperProxy else {
-            throw HelperError.connectionUnavailable
-        }
-
-        return try await withCheckedThrowingContinuation { raw in
-            let continuation = SafeContinuation(raw)
-
-            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
-                continuation.resume(throwing: HelperError.connectionUnavailable)
-            }
-
+        try await invokeHelper { helper, finish in
             helper.readSMCByte(key: key) { value, errorDescription in
                 if let errorDescription {
-                    continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
+                    finish(.failure(HelperError.readFailed(key: key, description: errorDescription)))
                 } else {
-                    continuation.resume(returning: value)
+                    finish(.success(value))
                 }
             }
         }
     }
 
     func resetModifiedKeys() async {
-        guard let helper = helperProxy else { return }
-
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            var hasResumed = false
-
-            func finish() -> Void {
-                guard !hasResumed else { return }
-                hasResumed = true
-                continuation.resume()
-            }
-
-            helper.resetModifiedKeys {
-                Task { @MainActor in
-                    finish()
+        do {
+            let _: Void = try await invokeHelper(timeout: Self.resetTimeout) { helper, finish in
+                helper.resetModifiedKeys {
+                    finish(.success(()))
                 }
             }
-
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(2))
-                finish()
-            }
+        } catch {
+            return
         }
     }
 
     func invalidateConnection() {
         _connection?.invalidate()
         _connection = nil
-    }
-
-    private var helperProxy: ChargeCapHelperProtocol? {
-        if let _proxyOverride { return _proxyOverride }
-
-        let conn = connection
-        var proxyError: Error?
-        let proxy = conn.remoteObjectProxyWithErrorHandler { error in
-            proxyError = error
-        } as? ChargeCapHelperProtocol
-
-        if let proxyError {
-            Task { @MainActor in
-                self.isInstalled = false
-                self.lastErrorDescription = proxyError.localizedDescription
-            }
-        }
-
-        return proxy
     }
 
     private func registerDaemon() throws {
@@ -200,6 +152,7 @@ final class PrivilegedHelperManager: ObservableObject {
     }
 
     private static let xpcTimeout: TimeInterval = 5
+    private static let resetTimeout: TimeInterval = 2
 
     /// Wraps a continuation to guarantee exactly one resume, preventing leaks.
     final class SafeContinuation<T: Sendable>: @unchecked Sendable {
@@ -225,116 +178,138 @@ final class PrivilegedHelperManager: ObservableObject {
             lock.unlock()
             c?.resume(throwing: error)
         }
+
+        func resume(with result: Result<T, Error>) {
+            switch result {
+            case .success(let value):
+                resume(returning: value)
+            case .failure(let error):
+                resume(throwing: error)
+            }
+        }
     }
 
     private func getVersion() async throws -> String {
-        guard let helper = helperProxy else {
-            throw HelperError.connectionUnavailable
-        }
-
-        return try await withCheckedThrowingContinuation { raw in
-            let continuation = SafeContinuation(raw)
-
-            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
-                continuation.resume(throwing: HelperError.connectionUnavailable)
-            }
-
+        try await invokeHelper { helper, finish in
             helper.getVersion { version in
                 if version == ChargeCapHelperConfiguration.version {
-                    continuation.resume(returning: version)
+                    finish(.success(version))
                 } else {
-                    continuation.resume(throwing: HelperError.versionMismatch(expected: ChargeCapHelperConfiguration.version, actual: version))
+                    finish(.failure(HelperError.versionMismatch(expected: ChargeCapHelperConfiguration.version, actual: version)))
                 }
             }
         }
     }
 
     func writeSMCByte(key: String, value: UInt8) async throws {
-        guard let helper = helperProxy else {
-            throw HelperError.connectionUnavailable
-        }
-
-        try await withCheckedThrowingContinuation { (raw: CheckedContinuation<Void, Error>) in
-            let continuation = SafeContinuation(raw)
-
-            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
-                continuation.resume(throwing: HelperError.connectionUnavailable)
-            }
-
+        try await invokeHelper { helper, finish in
             helper.writeSMCByte(key: key, value: value) { success, errorDescription in
                 if success {
-                    continuation.resume(returning: ())
+                    finish(.success(()))
                 } else {
-                    continuation.resume(throwing: HelperError.writeFailed(key: key, description: errorDescription ?? "Unknown SMC write error"))
+                    finish(.failure(HelperError.writeFailed(key: key, description: errorDescription ?? "Unknown SMC write error")))
                 }
             }
         }
     }
 
     private func setChargingEnabled(_ enabled: Bool) async throws {
-        guard let helper = helperProxy else {
-            throw HelperError.connectionUnavailable
-        }
-
-        try await withCheckedThrowingContinuation { (raw: CheckedContinuation<Void, Error>) in
-            let continuation = SafeContinuation(raw)
-
-            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
-                continuation.resume(throwing: HelperError.connectionUnavailable)
-            }
-
+        try await invokeHelper { helper, finish in
             helper.setChargingEnabled(enabled) { success, errorDescription in
                 if success {
-                    continuation.resume(returning: ())
+                    finish(.success(()))
                 } else {
-                    continuation.resume(throwing: HelperError.chargingControlFailed(description: errorDescription ?? "Unknown error"))
+                    finish(.failure(HelperError.chargingControlFailed(description: errorDescription ?? "Unknown error")))
                 }
             }
         }
     }
 
     private func readSMCUInt32(key: String) async throws -> UInt32 {
-        guard let helper = helperProxy else {
-            throw HelperError.connectionUnavailable
-        }
-
-        return try await withCheckedThrowingContinuation { raw in
-            let continuation = SafeContinuation(raw)
-
-            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
-                continuation.resume(throwing: HelperError.connectionUnavailable)
-            }
-
+        try await invokeHelper { helper, finish in
             helper.readSMCUInt32(key: key) { value, errorDescription in
                 if let errorDescription {
-                    continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
+                    finish(.failure(HelperError.readFailed(key: key, description: errorDescription)))
                 } else {
-                    continuation.resume(returning: value)
+                    finish(.success(value))
                 }
             }
         }
     }
 
     private func readSMCTemperature(key: String) async throws -> Double {
-        guard let helper = helperProxy else {
-            throw HelperError.connectionUnavailable
-        }
-
-        return try await withCheckedThrowingContinuation { raw in
-            let continuation = SafeContinuation(raw)
-
-            DispatchQueue.global().asyncAfter(deadline: .now() + Self.xpcTimeout) {
-                continuation.resume(throwing: HelperError.connectionUnavailable)
-            }
-
+        try await invokeHelper { helper, finish in
             helper.readSMCTemperature(key: key) { value, errorDescription in
                 if let errorDescription {
-                    continuation.resume(throwing: HelperError.readFailed(key: key, description: errorDescription))
+                    finish(.failure(HelperError.readFailed(key: key, description: errorDescription)))
                 } else {
-                    continuation.resume(returning: value)
+                    finish(.success(value))
                 }
             }
         }
+    }
+
+    private func invokeHelper<T: Sendable>(
+        timeout: TimeInterval? = nil,
+        _ request: @escaping (ChargeCapHelperProtocol, @escaping (Result<T, Error>) -> Void) -> Void
+    ) async throws -> T {
+        try await withCheckedThrowingContinuation { raw in
+            let continuation = SafeContinuation(raw)
+            let timeoutInterval = timeout ?? Self.xpcTimeout
+
+            let timeoutWorkItem = DispatchWorkItem { [weak self] in
+                Task { @MainActor in
+                    self?.handleConnectionFailure(description: HelperError.connectionUnavailable.errorDescription)
+                }
+                continuation.resume(throwing: HelperError.connectionUnavailable)
+            }
+
+            let finish: (Result<T, Error>) -> Void = { result in
+                timeoutWorkItem.cancel()
+                continuation.resume(with: result)
+            }
+
+            let helper: ChargeCapHelperProtocol
+            if let proxyOverride = _proxyOverride {
+                helper = proxyOverride
+            } else {
+                let remoteProxy = connection.remoteObjectProxyWithErrorHandler { [weak self] error in
+                    timeoutWorkItem.cancel()
+                    Task { @MainActor in
+                        self?.handleConnectionFailure(description: error.localizedDescription)
+                    }
+                    continuation.resume(throwing: HelperError.connectionUnavailable)
+                } as? ChargeCapHelperProtocol
+
+                guard let remoteProxy else {
+                    timeoutWorkItem.cancel()
+                    Task { @MainActor in
+                        self.handleConnectionFailure(description: HelperError.connectionUnavailable.errorDescription)
+                    }
+                    continuation.resume(throwing: HelperError.connectionUnavailable)
+                    return
+                }
+
+                helper = remoteProxy
+            }
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeoutInterval, execute: timeoutWorkItem)
+            request(helper, finish)
+        }
+    }
+
+    private func handleConnectionFailure(description: String? = nil) {
+        let staleConnection = _connection
+        _connection = nil
+        isInstalled = false
+        if let description {
+            lastErrorDescription = description
+        } else if lastErrorDescription == nil {
+            lastErrorDescription = HelperError.connectionUnavailable.errorDescription
+        }
+        staleConnection?.interruptionHandler = nil
+        staleConnection?.invalidationHandler = nil
+        staleConnection?.invalidate()
     }
 
     enum HelperError: LocalizedError {

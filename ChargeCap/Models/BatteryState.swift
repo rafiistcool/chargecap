@@ -41,6 +41,13 @@ struct BatteryState: Equatable {
     /// Instantaneous battery rate from SMC when available.
     var batteryRate: Int?
 
+    /// Live system load from AppleSmartBattery power telemetry, in milliwatts.
+    var systemLoadMilliwatts: Int?
+
+    /// Live battery power from AppleSmartBattery power telemetry, in milliwatts.
+    /// Positive values mean charging; negative values mean discharging.
+    var batteryPowerMilliwatts: Int?
+
     // MARK: - Time estimates
 
     /// Minutes until fully charged (valid only when charging; 0 if unavailable).
@@ -102,6 +109,81 @@ struct BatteryState: Equatable {
         }
     }
 
+    /// The best available live battery power reading, preferring IORegistry telemetry
+    /// and falling back to the SMC battery rate when telemetry is unavailable.
+    var liveBatteryPowerMilliwatts: Int? {
+        batteryPowerMilliwatts ?? batteryRate
+    }
+
+    /// The best available system load reading in milliwatts.
+    /// When the Mac is discharging and only the battery power is known, use the
+    /// battery draw as a practical fallback for system load.
+    var liveSystemLoadMilliwatts: Int? {
+        if let systemLoadMilliwatts, systemLoadMilliwatts > 0 {
+            return systemLoadMilliwatts
+        }
+
+        guard !isPluggedIn, let liveBatteryPowerMilliwatts else { return nil }
+        return abs(liveBatteryPowerMilliwatts)
+    }
+
+    var batteryChargingWatts: Double? {
+        guard let liveBatteryPowerMilliwatts, liveBatteryPowerMilliwatts > 0 else { return nil }
+        return Double(liveBatteryPowerMilliwatts) / 1000.0
+    }
+
+    var batteryDischargingWatts: Double? {
+        guard let liveBatteryPowerMilliwatts, liveBatteryPowerMilliwatts < 0 else { return nil }
+        return Double(abs(liveBatteryPowerMilliwatts)) / 1000.0
+    }
+
+    var systemLoadWatts: Double? {
+        guard let liveSystemLoadMilliwatts, liveSystemLoadMilliwatts > 0 else { return nil }
+        return Double(liveSystemLoadMilliwatts) / 1000.0
+    }
+
+    init(
+        chargePercent: Int,
+        isCharging: Bool,
+        isPluggedIn: Bool,
+        chargeLimit: Int?,
+        batteryRate: Int?,
+        systemLoadMilliwatts: Int? = nil,
+        batteryPowerMilliwatts: Int? = nil,
+        timeToFull: Int,
+        timeToEmpty: Int,
+        healthPercent: Int,
+        condition: BatteryCondition,
+        cycleCount: Int,
+        maxCycleCount: Int,
+        temperature: Double,
+        designCapacity: Int,
+        maxCapacity: Int,
+        adapterWattage: Int,
+        isChargeInhibited: Bool,
+        hasBattery: Bool
+    ) {
+        self.chargePercent = chargePercent
+        self.isCharging = isCharging
+        self.isPluggedIn = isPluggedIn
+        self.chargeLimit = chargeLimit
+        self.batteryRate = batteryRate
+        self.systemLoadMilliwatts = systemLoadMilliwatts
+        self.batteryPowerMilliwatts = batteryPowerMilliwatts
+        self.timeToFull = timeToFull
+        self.timeToEmpty = timeToEmpty
+        self.healthPercent = healthPercent
+        self.condition = condition
+        self.cycleCount = cycleCount
+        self.maxCycleCount = maxCycleCount
+        self.temperature = temperature
+        self.designCapacity = designCapacity
+        self.maxCapacity = maxCapacity
+        self.adapterWattage = adapterWattage
+        self.isChargeInhibited = isChargeInhibited
+        self.hasBattery = hasBattery
+    }
+
     // MARK: - Static instances
 
     static let placeholder = BatteryState(
@@ -110,6 +192,8 @@ struct BatteryState: Equatable {
         isPluggedIn: true,
         chargeLimit: nil,
         batteryRate: 0,
+        systemLoadMilliwatts: 12_700,
+        batteryPowerMilliwatts: 4_100,
         timeToFull: 65,
         timeToEmpty: 0,
         healthPercent: 94,
@@ -130,6 +214,8 @@ struct BatteryState: Equatable {
         isPluggedIn: true,
         chargeLimit: nil,
         batteryRate: nil,
+        systemLoadMilliwatts: nil,
+        batteryPowerMilliwatts: nil,
         timeToFull: 0,
         timeToEmpty: 0,
         healthPercent: 0,

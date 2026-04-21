@@ -137,6 +137,17 @@ enum SMCKit {
 
     private static var connection: io_connect_t = 0
     private static let lock = NSLock()
+    private static var ioMainPort: mach_port_t {
+        if #available(macOS 12.0, *) {
+            return kIOMainPortDefault
+        }
+
+#if swift(>=5.9)
+        return kIOMasterPortDefault
+#else
+        return kIOMasterPortDefault
+#endif
+    }
 
     static func open() throws {
         lock.lock()
@@ -144,9 +155,9 @@ enum SMCKit {
 
         if connection != 0 { return }
 
-        var service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMCKeysEndpoint"))
+        var service = IOServiceGetMatchingService(ioMainPort, IOServiceMatching("AppleSMCKeysEndpoint"))
         if service == 0 {
-            service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
+            service = IOServiceGetMatchingService(ioMainPort, IOServiceMatching("AppleSMC"))
         }
         if service == 0 {
             throw SMCError.driverNotFound

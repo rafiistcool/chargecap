@@ -159,7 +159,7 @@ final class BatteryStateTests: XCTestCase {
     }
 
     func testBatteryState_unequalInstances() {
-        var a = BatteryState.placeholder
+        let a = BatteryState.placeholder
         var b = BatteryState.placeholder
         b.chargePercent = 50
         XCTAssertNotEqual(a, b)

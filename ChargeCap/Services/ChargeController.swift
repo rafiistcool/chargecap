@@ -3,26 +3,109 @@ import Foundation
 import OSLog
 
 @MainActor
+protocol BatteryMonitoring: AnyObject {
+    var batteryState: BatteryState { get }
+    var batteryStatePublisher: AnyPublisher<BatteryState, Never> { get }
+    func updateRefreshInterval(seconds: Int)
+    func updateChargeMetadata(limit: Int?, isChargeInhibited: Bool)
+    func updateSMCReadings(batteryRate: Int?, temperature: Double?)
+}
+
+@MainActor
+extension BatteryMonitor: BatteryMonitoring, TelemetryRefreshControlling {
+    var batteryStatePublisher: AnyPublisher<BatteryState, Never> {
+        $batteryState.eraseToAnyPublisher()
+    }
+}
+
+@MainActor
+protocol ChargeControllerSettings: AnyObject {
+    var isChargeLimitingEnabled: Bool { get set }
+    var targetChargeLimit: Int { get set }
+    var sailingRange: Int { get set }
+    var isSailingModeEnabled: Bool { get set }
+    var isHeatProtectionEnabled: Bool { get set }
+    var warmTemperatureThreshold: Int { get set }
+    var hotTemperatureThreshold: Int { get set }
+    var chargeSchedule: ChargeSchedule { get set }
+    var refreshIntervalSeconds: Int { get set }
+    var chargeControlSettingsPublisher: AnyPublisher<Void, Never> { get }
+}
+
+extension AppSettings: ChargeControllerSettings {
+    var chargeControlSettingsPublisher: AnyPublisher<Void, Never> {
+        Publishers.MergeMany(
+            $isChargeLimitingEnabled.map { _ in () }.eraseToAnyPublisher(),
+            $targetChargeLimit.map { _ in () }.eraseToAnyPublisher(),
+            $sailingRange.map { _ in () }.eraseToAnyPublisher(),
+            $isSailingModeEnabled.map { _ in () }.eraseToAnyPublisher(),
+            $isHeatProtectionEnabled.map { _ in () }.eraseToAnyPublisher(),
+            $warmTemperatureThreshold.map { _ in () }.eraseToAnyPublisher(),
+            $hotTemperatureThreshold.map { _ in () }.eraseToAnyPublisher(),
+            $chargeSchedule.map { _ in () }.eraseToAnyPublisher(),
+            $refreshIntervalSeconds.map { _ in () }.eraseToAnyPublisher()
+        )
+        .eraseToAnyPublisher()
+    }
+}
+
+@MainActor
+protocol ChargeControlHelping: AnyObject {
+    var isInstalled: Bool { get }
+    var lastErrorDescription: String? { get }
+    func refreshStatus() async
+    func installIfNeeded(force: Bool) async throws
+    func enableCharging() async throws
+    func disableCharging() async throws
+    func pauseCharging() async throws
+    func batteryRate() async throws -> UInt32
+    func batteryTemperatureFromSMC() async throws -> Double
+}
+
+extension PrivilegedHelperManager: ChargeControlHelping {}
+
+@MainActor
+protocol ProFeatureManaging: AnyObject {
+    var hasUnlockedPro: Bool { get }
+    var hasUnlockedProPublisher: AnyPublisher<Bool, Never> { get }
+}
+
+extension ProManager: ProFeatureManaging {
+    var hasUnlockedProPublisher: AnyPublisher<Bool, Never> {
+        $hasUnlockedPro.eraseToAnyPublisher()
+    }
+}
+
+@MainActor
+extension HardwareMonitor: TelemetryRefreshControlling {}
+
+@MainActor
+extension ChargeController: TelemetryRefreshControlling {}
+
+@MainActor
 final class ChargeController: ObservableObject {
     @Published private(set) var state: ChargeControlState
 
-    private let monitor: BatteryMonitor
-    private let settings: AppSettings
-    private let helperManager: PrivilegedHelperManager
-    private let proManager: ProManager
+    private let monitor: any BatteryMonitoring
+    private let settings: any ChargeControllerSettings
+    private let helperManager: any ChargeControlHelping
+    private let proManager: any ProFeatureManaging
     private let calendar: Calendar
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ChargeCap", category: "ChargeController")
 
     private var cancellables = Set<AnyCancellable>()
     private var lastCommand: ChargeCommand?
+    private var pendingCommand: ChargeCommand?
     private var isApplyingCommand = false
     private var lastTelemetryRefresh: Date?
+    private var configuredTelemetryRefreshInterval: TimeInterval = Constants.defaultRefreshInterval
+    private var isInteractiveRefreshEnabled = false
 
     init(
-        monitor: BatteryMonitor,
-        settings: AppSettings,
-        helperManager: PrivilegedHelperManager,
-        proManager: ProManager,
+        monitor: any BatteryMonitoring,
+        settings: any ChargeControllerSettings,
+        helperManager: any ChargeControlHelping,
+        proManager: any ProFeatureManaging,
         calendar: Calendar = .current
     ) {
         self.monitor = monitor
@@ -32,6 +115,7 @@ final class ChargeController: ObservableObject {
         self.calendar = calendar
         self.state = Self.makeInitialState(settings: settings)
 
+        updateRefreshInterval(seconds: settings.refreshIntervalSeconds)
         monitor.updateRefreshInterval(seconds: settings.refreshIntervalSeconds)
         bind()
 
@@ -111,34 +195,25 @@ final class ChargeController: ObservableObject {
     }
 
     private func bind() {
-        monitor.$batteryState
+        monitor.batteryStatePublisher
             .receive(on: RunLoop.main)
             .sink { [weak self] (batteryState: BatteryState) in
                 self?.evaluate(using: batteryState)
             }
             .store(in: &cancellables)
 
-        Publishers.MergeMany(
-            settings.$isChargeLimitingEnabled.map { _ in () }.eraseToAnyPublisher(),
-            settings.$targetChargeLimit.map { _ in () }.eraseToAnyPublisher(),
-            settings.$sailingRange.map { _ in () }.eraseToAnyPublisher(),
-            settings.$isSailingModeEnabled.map { _ in () }.eraseToAnyPublisher(),
-            settings.$isHeatProtectionEnabled.map { _ in () }.eraseToAnyPublisher(),
-            settings.$warmTemperatureThreshold.map { _ in () }.eraseToAnyPublisher(),
-            settings.$hotTemperatureThreshold.map { _ in () }.eraseToAnyPublisher(),
-            settings.$chargeSchedule.map { _ in () }.eraseToAnyPublisher(),
-            settings.$refreshIntervalSeconds.map { _ in () }.eraseToAnyPublisher()
-        )
+        settings.chargeControlSettingsPublisher
             .receive(on: RunLoop.main)
             .sink { [weak self] (_: Void) in
                 guard let self else { return }
                 self.state = Self.state(from: self.state, settings: self.settings)
+                self.updateRefreshInterval(seconds: self.settings.refreshIntervalSeconds)
                 self.monitor.updateRefreshInterval(seconds: self.settings.refreshIntervalSeconds)
                 self.evaluate(using: self.monitor.batteryState)
             }
             .store(in: &cancellables)
 
-        proManager.$hasUnlockedPro
+        proManager.hasUnlockedProPublisher
             .receive(on: RunLoop.main)
             .sink { [weak self] (_: Bool) in
                 guard let self else { return }
@@ -298,13 +373,28 @@ final class ChargeController: ObservableObject {
     }
 
     private func enqueueCommand(_ command: ChargeCommand) {
-        guard lastCommand != command else { return }
-        guard !isApplyingCommand else { return }
+        guard lastCommand != command else {
+            pendingCommand = nil
+            return
+        }
+
+        guard !isApplyingCommand else {
+            pendingCommand = command
+            return
+        }
 
         isApplyingCommand = true
-        Task {
-            defer { isApplyingCommand = false }
+        pendingCommand = nil
 
+        Task { @MainActor in
+            await applyQueuedCommands(startingWith: command)
+        }
+    }
+
+    private func applyQueuedCommands(startingWith command: ChargeCommand) async {
+        var commandToApply: ChargeCommand? = command
+
+        while let command = commandToApply {
             do {
                 switch command {
                 case .normal:
@@ -319,12 +409,22 @@ final class ChargeController: ObservableObject {
                 state.command = command
                 state.lastTransitionDate = .now
                 state.lastErrorDescription = nil
+
+                commandToApply = pendingCommand
+                pendingCommand = nil
+                if commandToApply == lastCommand {
+                    commandToApply = nil
+                }
             } catch {
                 logger.error("Failed to apply charge command: \(error.localizedDescription, privacy: .public)")
                 state.lastErrorDescription = error.localizedDescription
                 state.status = .unavailable(error.localizedDescription)
+                pendingCommand = nil
+                commandToApply = nil
             }
         }
+
+        isApplyingCommand = false
     }
 
     private func refreshSMCTelemetryIfAvailable() async {
@@ -344,14 +444,38 @@ final class ChargeController: ObservableObject {
 
     private var shouldRefreshTelemetry: Bool {
         guard let lastTelemetryRefresh else { return true }
-        return Date.now.timeIntervalSince(lastTelemetryRefresh) >= TimeInterval(settings.refreshIntervalSeconds)
+        return Date.now.timeIntervalSince(lastTelemetryRefresh) >= effectiveTelemetryRefreshInterval
     }
 
-    static func makeInitialState(settings: AppSettings) -> ChargeControlState {
+    private var effectiveTelemetryRefreshInterval: TimeInterval {
+        guard isInteractiveRefreshEnabled else { return configuredTelemetryRefreshInterval }
+        return min(configuredTelemetryRefreshInterval, Constants.interactiveRefreshInterval)
+    }
+
+    func updateRefreshInterval(seconds: Int) {
+        configuredTelemetryRefreshInterval = min(
+            Constants.maxRefreshInterval,
+            max(Constants.minRefreshInterval, TimeInterval(seconds))
+        )
+    }
+
+    func setInteractiveRefreshEnabled(_ enabled: Bool) {
+        guard isInteractiveRefreshEnabled != enabled else { return }
+        isInteractiveRefreshEnabled = enabled
+
+        if enabled {
+            lastTelemetryRefresh = nil
+            Task {
+                await refreshSMCTelemetryIfAvailable()
+            }
+        }
+    }
+
+    static func makeInitialState(settings: any ChargeControllerSettings) -> ChargeControlState {
         Self.state(from: ChargeControlState.default, settings: settings)
     }
 
-    static func state(from state: ChargeControlState, settings: AppSettings) -> ChargeControlState {
+    static func state(from state: ChargeControlState, settings: any ChargeControllerSettings) -> ChargeControlState {
         var nextState = state
         nextState.targetLimit = settings.targetChargeLimit
         nextState.sailingRange = settings.sailingRange

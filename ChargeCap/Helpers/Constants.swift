@@ -43,6 +43,9 @@ enum Constants {
     /// Default interval in seconds between battery state refreshes.
     static let defaultRefreshInterval: TimeInterval = 15
 
+    /// Foreground interval used while the app is active or the menu-bar popup is open.
+    static let interactiveRefreshInterval: TimeInterval = 2
+
     enum Pro {
         static let price = "$4.99"
         static let productID = "com.chargecap.pro.lifetime"

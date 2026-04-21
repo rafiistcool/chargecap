@@ -6,6 +6,7 @@ struct MenuBarView: View {
     @EnvironmentObject private var controller: ChargeController
     @EnvironmentObject private var proManager: ProManager
     @EnvironmentObject private var hardwareMonitor: HardwareMonitor
+    @EnvironmentObject private var telemetryRefreshCoordinator: TelemetryRefreshCoordinator
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -41,7 +42,13 @@ struct MenuBarView: View {
             }
             settingsRow
         }
-        .frame(width: 270)
+        .frame(width: 320)
+        .onAppear {
+            telemetryRefreshCoordinator.setMenuBarVisible(true)
+        }
+        .onDisappear {
+            telemetryRefreshCoordinator.setMenuBarVisible(false)
+        }
     }
 
     // MARK: - Sections
@@ -60,14 +67,23 @@ struct MenuBarView: View {
 
     @ViewBuilder
     private func chargeSection(_ state: BatteryState, controlState: ChargeControlState) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Image(systemName: batteryIconName(for: state, controlState: controlState))
-                    .foregroundStyle(batteryIconColor(for: state))
-                Text("\(state.chargePercent)% — \(chargingStatusText(state))")
-                    .font(.body)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                HStack(spacing: 8) {
+                    Image(systemName: batteryIconName(for: state, controlState: controlState))
+                        .foregroundStyle(batteryIconColor(for: state))
+                    Text("\(state.chargePercent)%")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                }
+
                 Spacer()
+
+                Text(chargingStatusText(state))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
             }
+
             if let timeStr = timeRemainingString(state) {
                 HStack(spacing: 4) {
                     Image(systemName: "clock")
@@ -77,9 +93,13 @@ struct MenuBarView: View {
                 }
                 .font(.subheadline)
             }
+
+            if let powerFlow = powerFlowSnapshot(for: state) {
+                powerFlowCard(powerFlow)
+            }
         }
         .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
     }
 
     @ViewBuilder
@@ -429,6 +449,182 @@ struct MenuBarView: View {
         return "\(state.adapterWattage)W USB-C"
     }
 
+    private func powerFlowSnapshot(for state: BatteryState) -> PowerFlowSnapshot? {
+        if let batteryChargingWatts = state.batteryChargingWatts,
+           let systemLoadWatts = state.systemLoadWatts
+        {
+            return PowerFlowSnapshot(
+                title: "Power Flow",
+                totalWatts: batteryChargingWatts + systemLoadWatts,
+                segments: [
+                    PowerFlowSegment(
+                        id: "battery",
+                        label: "Battery",
+                        systemImage: "battery.100",
+                        watts: batteryChargingWatts,
+                        tint: Color(red: 0.95, green: 0.71, blue: 0.33),
+                        colors: [
+                            Color(red: 0.47, green: 0.34, blue: 0.16),
+                            Color(red: 0.98, green: 0.74, blue: 0.32),
+                        ]
+                    ),
+                    PowerFlowSegment(
+                        id: "system",
+                        label: "System",
+                        systemImage: "laptopcomputer",
+                        watts: systemLoadWatts,
+                        tint: Color(red: 0.50, green: 0.78, blue: 0.96),
+                        colors: [
+                            Color(red: 0.16, green: 0.30, blue: 0.43),
+                            Color(red: 0.31, green: 0.56, blue: 0.79),
+                        ]
+                    ),
+                ]
+            )
+        }
+
+        if let systemLoadWatts = state.systemLoadWatts {
+            return PowerFlowSnapshot(
+                title: "System Draw",
+                totalWatts: systemLoadWatts,
+                segments: [
+                    PowerFlowSegment(
+                        id: "system",
+                        label: "System",
+                        systemImage: "laptopcomputer",
+                        watts: systemLoadWatts,
+                        tint: Color(red: 0.50, green: 0.78, blue: 0.96),
+                        colors: [
+                            Color(red: 0.16, green: 0.30, blue: 0.43),
+                            Color(red: 0.31, green: 0.56, blue: 0.79),
+                        ]
+                    ),
+                ]
+            )
+        }
+
+        if let batteryDischargingWatts = state.batteryDischargingWatts {
+            return PowerFlowSnapshot(
+                title: "System Draw",
+                totalWatts: batteryDischargingWatts,
+                segments: [
+                    PowerFlowSegment(
+                        id: "system",
+                        label: "System",
+                        systemImage: "laptopcomputer",
+                        watts: batteryDischargingWatts,
+                        tint: Color(red: 0.50, green: 0.78, blue: 0.96),
+                        colors: [
+                            Color(red: 0.16, green: 0.30, blue: 0.43),
+                            Color(red: 0.31, green: 0.56, blue: 0.79),
+                        ]
+                    ),
+                ]
+            )
+        }
+
+        return nil
+    }
+
+    private func powerFlowCard(_ snapshot: PowerFlowSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center) {
+                Label(snapshot.title, systemImage: "bolt.horizontal.circle")
+                    .font(.subheadline.weight(.semibold))
+
+                Spacer()
+
+                Text(wattsText(snapshot.totalWatts))
+                    .font(.system(.title3, design: .rounded).weight(.bold))
+                    .monospacedDigit()
+            }
+
+            powerFlowBar(snapshot)
+
+            HStack(spacing: 8) {
+                ForEach(snapshot.segments) { segment in
+                    powerFlowChip(segment)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.95))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.08))
+        )
+    }
+
+    private func powerFlowBar(_ snapshot: PowerFlowSnapshot) -> some View {
+        GeometryReader { geometry in
+            let totalWatts = max(snapshot.totalWatts, 0.001)
+            let totalSpacing = CGFloat(max(snapshot.segments.count - 1, 0)) * 4
+            let availableWidth = max(geometry.size.width - 8 - totalSpacing, 0)
+
+            HStack(spacing: 4) {
+                ForEach(snapshot.segments) { segment in
+                    let segmentWidth = availableWidth * CGFloat(segment.watts / totalWatts)
+
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: segment.colors,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: segmentWidth)
+                        .overlay(alignment: .center) {
+                            if segmentWidth > 72 {
+                                Text(wattsText(segment.watts))
+                                    .font(.caption.weight(.semibold))
+                                    .monospacedDigit()
+                                    .foregroundStyle(.white.opacity(0.92))
+                            }
+                        }
+                }
+            }
+            .padding(4)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.black.opacity(0.16))
+            )
+        }
+        .frame(height: 28)
+    }
+
+    private func powerFlowChip(_ segment: PowerFlowSegment) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: segment.systemImage)
+                .foregroundStyle(segment.tint)
+
+            Text(segment.label)
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 6)
+
+            Text(wattsText(segment.watts))
+                .fontWeight(.semibold)
+                .monospacedDigit()
+        }
+        .font(.caption.weight(.medium))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+        )
+    }
+
+    private func wattsText(_ watts: Double) -> String {
+        String(format: "%.2f W", watts)
+    }
+
     private func usageBar(percent: Double) -> some View {
         let clampedPercent = min(100, max(0, percent))
         let filledBlocks = Int((clampedPercent / 100) * 10)
@@ -463,6 +659,21 @@ struct MenuBarView: View {
     }
 }
 
+private struct PowerFlowSnapshot {
+    let title: String
+    let totalWatts: Double
+    let segments: [PowerFlowSegment]
+}
+
+private struct PowerFlowSegment: Identifiable {
+    let id: String
+    let label: String
+    let systemImage: String
+    let watts: Double
+    let tint: Color
+    let colors: [Color]
+}
+
 #Preview {
     let monitor = BatteryMonitor()
     let settings = AppSettings()
@@ -481,4 +692,10 @@ struct MenuBarView: View {
         .environmentObject(controller)
         .environmentObject(proManager)
         .environmentObject(hardwareMonitor)
+        .environmentObject(
+            TelemetryRefreshCoordinator(
+                components: [monitor, hardwareMonitor, controller],
+                backgroundRefreshIntervalSeconds: Int(Constants.defaultRefreshInterval)
+            )
+        )
 }

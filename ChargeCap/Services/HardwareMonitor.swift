@@ -47,7 +47,8 @@ final class HardwareMonitor: ObservableObject {
 
     private var timer: AnyCancellable?
     private var previousCPUTicks: CPUTicks?
-    private static let refreshInterval: TimeInterval = 3
+    private var configuredRefreshInterval: TimeInterval = Constants.defaultRefreshInterval
+    private var isInteractiveRefreshEnabled = false
 
     /// Keys known to return valid readings on the current machine.
     /// `nil` means "not probed yet" and causes the next `readTemperatures()`
@@ -144,14 +145,44 @@ final class HardwareMonitor: ObservableObject {
     private func startTimer() {
         // Do an initial read immediately
         Task { await refresh() }
+        scheduleTimer()
+    }
 
-        timer = Timer.publish(every: Self.refreshInterval, on: .main, in: .common)
+    func updateRefreshInterval(seconds: Int) {
+        let clampedInterval = min(Constants.maxRefreshInterval, max(Constants.minRefreshInterval, TimeInterval(seconds)))
+        guard configuredRefreshInterval != clampedInterval else { return }
+        configuredRefreshInterval = clampedInterval
+        restartTimer(refreshImmediately: false)
+    }
+
+    func setInteractiveRefreshEnabled(_ enabled: Bool) {
+        guard isInteractiveRefreshEnabled != enabled else { return }
+        isInteractiveRefreshEnabled = enabled
+        restartTimer(refreshImmediately: enabled)
+    }
+
+    private var effectiveRefreshInterval: TimeInterval {
+        guard isInteractiveRefreshEnabled else { return configuredRefreshInterval }
+        return min(configuredRefreshInterval, Constants.interactiveRefreshInterval)
+    }
+
+    private func scheduleTimer() {
+        timer = Timer.publish(every: effectiveRefreshInterval, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
                 Task { [weak self] in
                     await self?.refresh()
                 }
             }
+    }
+
+    private func restartTimer(refreshImmediately: Bool) {
+        timer?.cancel()
+        scheduleTimer()
+
+        if refreshImmediately {
+            Task { await refresh() }
+        }
     }
 
     // MARK: - Refresh

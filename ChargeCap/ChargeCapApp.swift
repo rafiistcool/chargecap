@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -29,28 +30,33 @@ struct ChargeCapApp: App {
     @StateObject private var proManager = ProManager()
     @StateObject private var chargeController: ChargeController
     @StateObject private var hardwareMonitor: HardwareMonitor
+    @StateObject private var telemetryRefreshCoordinator: TelemetryRefreshCoordinator
 
     init() {
         let monitor = BatteryMonitor()
         let settings = AppSettings()
         let helperManager = PrivilegedHelperManager()
         let proManager = ProManager()
+        let hardwareMonitor = HardwareMonitor(helperManager: helperManager)
+        let chargeController = ChargeController(
+            monitor: monitor,
+            settings: settings,
+            helperManager: helperManager,
+            proManager: proManager
+        )
+        let telemetryRefreshCoordinator = TelemetryRefreshCoordinator(
+            components: [monitor, hardwareMonitor, chargeController],
+            backgroundRefreshIntervalSeconds: settings.refreshIntervalSeconds,
+            isAppActive: NSApplication.shared.isActive
+        )
 
         _batteryMonitor = StateObject(wrappedValue: monitor)
         _appSettings = StateObject(wrappedValue: settings)
         _helperManager = StateObject(wrappedValue: helperManager)
         _proManager = StateObject(wrappedValue: proManager)
-        _chargeController = StateObject(
-            wrappedValue: ChargeController(
-                monitor: monitor,
-                settings: settings,
-                helperManager: helperManager,
-                proManager: proManager
-            )
-        )
-        _hardwareMonitor = StateObject(
-            wrappedValue: HardwareMonitor(helperManager: helperManager)
-        )
+        _chargeController = StateObject(wrappedValue: chargeController)
+        _hardwareMonitor = StateObject(wrappedValue: hardwareMonitor)
+        _telemetryRefreshCoordinator = StateObject(wrappedValue: telemetryRefreshCoordinator)
 
         appDelegate.helperManager = helperManager
     }
@@ -62,15 +68,9 @@ struct ChargeCapApp: App {
                 .environmentObject(chargeController)
                 .environmentObject(proManager)
                 .environmentObject(hardwareMonitor)
+                .environmentObject(telemetryRefreshCoordinator)
         } label: {
-            HStack(spacing: 2) {
-                let state = batteryMonitor.batteryState
-                Image(systemName: menuBarIconName)
-                if state.hasBattery && appSettings.showPercentInMenuBar {
-                    Text("\(state.chargePercent)%")
-                        .monospacedDigit()
-                }
-            }
+            menuBarLabel
         }
         .menuBarExtraStyle(.window)
 
@@ -112,5 +112,25 @@ struct ChargeCapApp: App {
         }
 
         return state.batteryIconName
+    }
+
+    private var menuBarLabel: some View {
+        HStack(spacing: 2) {
+            let state = batteryMonitor.batteryState
+            Image(systemName: menuBarIconName)
+            if state.hasBattery && appSettings.showPercentInMenuBar {
+                Text("\(state.chargePercent)%")
+                    .monospacedDigit()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            telemetryRefreshCoordinator.setAppActive(true)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            telemetryRefreshCoordinator.setAppActive(false)
+        }
+        .onReceive(appSettings.$refreshIntervalSeconds.removeDuplicates()) { refreshInterval in
+            telemetryRefreshCoordinator.updateBackgroundRefreshInterval(seconds: refreshInterval)
+        }
     }
 }
