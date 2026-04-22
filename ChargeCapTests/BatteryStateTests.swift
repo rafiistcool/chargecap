@@ -150,6 +150,58 @@ final class BatteryStateTests: XCTestCase {
         XCTAssertEqual(state.maxCapacity, 0)
     }
 
+    func testResolvedBatteryChargingWatts_usesRemainingAdapterPowerWhenTelemetryLooksLikeAdapterInput() throws {
+        let state = BatteryState(
+            chargePercent: 54,
+            isCharging: true,
+            isPluggedIn: true,
+            chargeLimit: 80,
+            batteryRate: nil,
+            systemLoadMilliwatts: 38_000,
+            batteryPowerMilliwatts: 140_000,
+            timeToFull: 50,
+            timeToEmpty: 0,
+            healthPercent: 97,
+            condition: .normal,
+            cycleCount: 41,
+            maxCycleCount: 1000,
+            temperature: 31.0,
+            designCapacity: 8579,
+            maxCapacity: 8214,
+            adapterWattage: 140,
+            isChargeInhibited: false,
+            hasBattery: true
+        )
+
+        XCTAssertEqual(try XCTUnwrap(state.resolvedBatteryChargingWatts), 102.0, accuracy: 0.001)
+    }
+
+    func testResolvedBatteryChargingWatts_keepsMeasuredBatteryPowerWhenItFitsWithinAdapterBudget() throws {
+        let state = BatteryState(
+            chargePercent: 54,
+            isCharging: true,
+            isPluggedIn: true,
+            chargeLimit: 80,
+            batteryRate: nil,
+            systemLoadMilliwatts: 22_000,
+            batteryPowerMilliwatts: 67_000,
+            timeToFull: 50,
+            timeToEmpty: 0,
+            healthPercent: 97,
+            condition: .normal,
+            cycleCount: 41,
+            maxCycleCount: 1000,
+            temperature: 31.0,
+            designCapacity: 8579,
+            maxCapacity: 8214,
+            adapterWattage: 140,
+            isChargeInhibited: false,
+            hasBattery: true
+        )
+
+        XCTAssertEqual(try XCTUnwrap(state.resolvedBatteryChargingWatts), 67.0, accuracy: 0.001)
+    }
+
     // MARK: - Equatable
 
     func testBatteryState_equalInstances() {

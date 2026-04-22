@@ -450,24 +450,11 @@ struct MenuBarView: View {
     }
 
     private func powerFlowSnapshot(for state: BatteryState) -> PowerFlowSnapshot? {
-        if let batteryChargingWatts = state.batteryChargingWatts,
-           let systemLoadWatts = state.systemLoadWatts
-        {
-            return PowerFlowSnapshot(
-                title: "Power Flow",
-                totalWatts: batteryChargingWatts + systemLoadWatts,
-                segments: [
-                    PowerFlowSegment(
-                        id: "battery",
-                        label: "Battery",
-                        systemImage: "battery.100",
-                        watts: batteryChargingWatts,
-                        tint: Color(red: 0.95, green: 0.71, blue: 0.33),
-                        colors: [
-                            Color(red: 0.47, green: 0.34, blue: 0.16),
-                            Color(red: 0.98, green: 0.74, blue: 0.32),
-                        ]
-                    ),
+        if let adapterInputWatts = state.adapterInputWatts {
+            var segments: [PowerFlowSegment] = []
+
+            if let systemLoadWatts = state.systemLoadWatts, systemLoadWatts > 0 {
+                segments.append(
                     PowerFlowSegment(
                         id: "system",
                         label: "System",
@@ -478,9 +465,52 @@ struct MenuBarView: View {
                             Color(red: 0.16, green: 0.30, blue: 0.43),
                             Color(red: 0.31, green: 0.56, blue: 0.79),
                         ]
-                    ),
-                ]
-            )
+                    )
+                )
+            }
+
+            if let batteryChargingWatts = state.resolvedBatteryChargingWatts, batteryChargingWatts > 0 {
+                segments.append(
+                    PowerFlowSegment(
+                        id: "battery",
+                        label: "Battery",
+                        systemImage: "battery.100",
+                        watts: batteryChargingWatts,
+                        tint: Color(red: 0.95, green: 0.71, blue: 0.33),
+                        colors: [
+                            Color(red: 0.47, green: 0.34, blue: 0.16),
+                            Color(red: 0.98, green: 0.74, blue: 0.32),
+                        ]
+                    )
+                )
+            }
+
+            let accountedWatts = segments.reduce(0) { $0 + $1.watts }
+            let unallocatedWatts = max(adapterInputWatts - accountedWatts, 0)
+
+            if unallocatedWatts > 0.5 {
+                segments.append(
+                    PowerFlowSegment(
+                        id: "overhead",
+                        label: "Other",
+                        systemImage: "ellipsis.circle",
+                        watts: unallocatedWatts,
+                        tint: Color.secondary,
+                        colors: [
+                            Color.white.opacity(0.10),
+                            Color.white.opacity(0.22),
+                        ]
+                    )
+                )
+            }
+
+            if !segments.isEmpty {
+                return PowerFlowSnapshot(
+                    title: "Adapter Input",
+                    totalWatts: adapterInputWatts,
+                    segments: segments
+                )
+            }
         }
 
         if let systemLoadWatts = state.systemLoadWatts {

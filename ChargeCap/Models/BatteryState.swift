@@ -132,6 +132,11 @@ struct BatteryState: Equatable {
         return Double(liveBatteryPowerMilliwatts) / 1000.0
     }
 
+    var adapterInputWatts: Double? {
+        guard isPluggedIn, adapterWattage > 0 else { return nil }
+        return Double(adapterWattage)
+    }
+
     var batteryDischargingWatts: Double? {
         guard let liveBatteryPowerMilliwatts, liveBatteryPowerMilliwatts < 0 else { return nil }
         return Double(abs(liveBatteryPowerMilliwatts)) / 1000.0
@@ -140,6 +145,42 @@ struct BatteryState: Equatable {
     var systemLoadWatts: Double? {
         guard let liveSystemLoadMilliwatts, liveSystemLoadMilliwatts > 0 else { return nil }
         return Double(liveSystemLoadMilliwatts) / 1000.0
+    }
+
+    /// A safer charging-power estimate for UI.
+    ///
+    /// On some Macs, the "BatteryPower" telemetry can mirror the adapter's full
+    /// input power instead of net battery charging power. When that happens,
+    /// derive battery charging power from the remaining adapter budget after the
+    /// current system load.
+    var resolvedBatteryChargingWatts: Double? {
+        let measuredBatteryChargingWatts = batteryChargingWatts
+
+        guard isPluggedIn else {
+            return measuredBatteryChargingWatts
+        }
+
+        if let adapterInputWatts, let systemLoadWatts {
+            let remainingAdapterWatts = max(adapterInputWatts - systemLoadWatts, 0)
+
+            if let measuredBatteryChargingWatts {
+                let exceedsAdapterBudget = measuredBatteryChargingWatts + systemLoadWatts > adapterInputWatts * 1.05
+                let suspiciouslyMatchesAdapter = measuredBatteryChargingWatts >= adapterInputWatts * 0.95
+
+                if exceedsAdapterBudget || suspiciouslyMatchesAdapter {
+                    return remainingAdapterWatts
+                }
+            }
+
+            return measuredBatteryChargingWatts ?? remainingAdapterWatts
+        }
+
+        if let measuredBatteryChargingWatts, let adapterInputWatts,
+           measuredBatteryChargingWatts >= adapterInputWatts * 0.95 {
+            return nil
+        }
+
+        return measuredBatteryChargingWatts
     }
 
     init(

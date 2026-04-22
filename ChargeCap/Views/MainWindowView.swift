@@ -214,6 +214,8 @@ private struct BatteryPane: View {
                             ("Charging", state.isCharging ? "Yes" : "No"),
                             ("Plugged in", state.isPluggedIn ? "Yes" : "No"),
                             ("Adapter", state.isPluggedIn ? (state.adapterWattage > 0 ? "\(state.adapterWattage) W" : "Connected") : "Not connected"),
+                            ("System draw", wattsValue(state.systemLoadWatts)),
+                            ("Battery charge", wattsValue(state.resolvedBatteryChargingWatts)),
                             ("Time to full", state.timeToFull > 0 ? formatMinutes(state.timeToFull) : "—"),
                             ("Time to empty", state.timeToEmpty > 0 ? formatMinutes(state.timeToEmpty) : "—"),
                         ])
@@ -241,6 +243,11 @@ private struct BatteryPane: View {
         let h = minutes / 60
         let m = minutes % 60
         return h > 0 ? "\(h)h \(m)m" : "\(m)m"
+    }
+
+    private func wattsValue(_ watts: Double?) -> String {
+        guard let watts, watts > 0 else { return "—" }
+        return String(format: "%.1f W", watts)
     }
 }
 
